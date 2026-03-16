@@ -1,0 +1,56 @@
+fmod ILP-grandparent is
+  sort PredName Const TermList Atom AtomList Metarule MRList .
+
+  subsort Atom < AtomList .
+  subsort Metarule < MRList .
+
+  op nilA : -> AtomList [ctor] .
+  op __   : AtomList AtomList -> AtomList [assoc id: nilA] .
+
+  op nilM : -> MRList [ctor] .
+  op __   : MRList MRList -> MRList [assoc id: nilM] .
+
+  op nilT : -> TermList [ctor] .
+  op __   : TermList TermList -> TermList [assoc id: nilT] .
+
+  op pred  : String Nat -> PredName [ctor] .
+  op const : String      -> Const    [ctor] .
+
+  op atom  : PredName TermList -> Atom [ctor] .
+
+  op metarule : String -> Metarule [ctor] .
+
+  op BK  : -> AtomList .
+  op POS : -> AtomList .
+  op NEG : -> AtomList .
+  op MRS : -> MRList .
+
+  eq BK =
+    atom(pred("mother",2), const("ann") const("amy"))
+    atom(pred("mother",2), const("ann") const("andy"))
+    atom(pred("mother",2), const("amy") const("amelia"))
+    atom(pred("mother",2), const("linda") const("gavin"))
+    atom(pred("father",2), const("steve") const("amy"))
+    atom(pred("father",2), const("steve") const("andy"))
+    atom(pred("father",2), const("gavin") const("amelia"))
+    atom(pred("father",2), const("andy") const("spongebob"))
+  .
+
+  eq MRS =
+    metarule("[P,Q],[P,A,B],[[Q,A,B]]")
+    metarule("[P,Q,R],[P,A,B],[[Q,A,B],[R,A,B]]")
+    metarule("[P,Q,R],[P,A,B],[[Q,A,C],[R,C,B]]")
+  .
+
+  eq POS =
+    atom(pred("grandparent",2), const("ann") const("amelia"))
+    atom(pred("grandparent",2), const("steve") const("amelia"))
+    atom(pred("grandparent",2), const("ann") const("spongebob"))
+    atom(pred("grandparent",2), const("steve") const("spongebob"))
+    atom(pred("grandparent",2), const("linda") const("amelia"))
+  .
+
+  eq NEG =
+    atom(pred("grandparent",2), const("amy") const("amelia"))
+  .
+endfm
