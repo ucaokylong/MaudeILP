@@ -1,0 +1,22 @@
+fmod ILP-CORE is
+  sort PredName Const TermList Atom AtomList Metarule MRList .
+
+  subsort Atom < AtomList .
+  subsort Metarule < MRList .
+
+  op nilA : -> AtomList [ctor] .
+  op __   : AtomList AtomList -> AtomList [assoc id: nilA] .
+
+  op nilM : -> MRList [ctor] .
+  op __   : MRList MRList -> MRList [assoc id: nilM] .
+
+  op nilT : -> TermList [ctor] .
+  op __   : TermList TermList -> TermList [assoc id: nilT] .
+
+  op pred  : String Nat -> PredName [ctor] .
+  op const : String      -> Const    [ctor] .
+
+  op atom  : PredName TermList -> Atom [ctor] .
+
+  op metarule : String -> Metarule [ctor] .
+endfm
