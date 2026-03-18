@@ -1,0 +1,176 @@
+fmod ILP-MR-SCHEMA is
+  protecting ILP-CORE .
+
+  *** 1. Predicate-level variables in metarule schemas
+  sort MRPredVar MRTermVar .
+
+  ops P Q R Cond Func Then Else : -> MRPredVar [ctor] .
+  ops A B C : -> MRTermVar [ctor] .
+
+  *** 2. Arguments of schema atoms (currently only term variables)
+  sort MRArg MRArgList .
+  op argVar : MRTermVar -> MRArg [ctor] .
+
+  op nilArg : -> MRArgList [ctor] .
+  op __     : MRArgList MRArgList -> MRArgList [assoc id: nilArg] .
+
+  *** 3. Data types for metarule atoms, heads, bodies, and schemas
+
+  sort MRAtom MRAtomList MRHead MRBody MRSchema .
+  subsort MRAtom < MRAtomList .
+
+  op nilMR : -> MRAtomList [ctor] .
+  op __    : MRAtomList MRAtomList -> MRAtomList [assoc id: nilMR] .
+
+  --- Schema atom, e.g., Q(A,C), R(C,B), Q(A,B,Cond,Func), ...
+  op mAtom : MRPredVar MRArgList -> MRAtom [ctor] .
+
+  --- Schema head, e.g., P(A,B), P(A,A)
+  op mHead : MRPredVar MRArgList -> MRHead [ctor] .
+
+  --- Schema body is a list of atoms
+  op mBody  : MRAtomList -> MRBody [ctor] .
+
+  --- A metarule schema = head + body
+  op schema : MRHead MRBody -> MRSchema [ctor] .
+
+  *** 4. Decode from string-based Metarule (from ILP-CORE) to structured schema
+  op decodeMR : Metarule -> MRSchema .
+
+  *******************************
+  *** 5. Concrete metarules    ***
+  *******************************
+
+  --- monadic: P(A,A) :- Q(A).
+  --- Prolog: metarule(monadic,[P,Q],[P,A,A],[[Q,A]]).
+  --- Maude (no extra spaces):
+  ---   metarule("[P,Q],[P,A,A],[[Q,A]]")
+  eq decodeMR(
+       metarule("[P,Q],[P,A,A],[[Q,A]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(A)),
+      mBody(
+        mAtom(Q, argVar(A))
+      )
+    ) .
+
+  --- chain: P(A,B) :- Q(A,C), R(C,B).
+  --- Prolog: metarule(chain,[P,Q,R],[P,A,B],[[Q,A,C],[R,C,B]]).
+  --- Maude:
+  ---   metarule("[P,Q,R],[P,A,B],[[Q,A,C],[R,C,B]]")
+  eq decodeMR(
+       metarule("[P,Q,R],[P,A,B],[[Q,A,C],[R,C,B]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        mAtom(Q, argVar(A) argVar(C))
+        mAtom(R, argVar(C) argVar(B))
+      )
+    ) .
+
+  --- precon: P(A,B) :- Q(A), R(A,B).
+  ---   metarule("[P,Q,R],[P,A,B],[[Q,A],[R,A,B]]")
+  eq decodeMR(
+       metarule("[P,Q,R],[P,A,B],[[Q,A],[R,A,B]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        mAtom(Q, argVar(A))
+        mAtom(R, argVar(A) argVar(B))
+      )
+    ) .
+
+  --- postcon: P(A,B) :- Q(A,B), R(B).
+  ---   metarule("[P,Q,R],[P,A,B],[[Q,A,B],[R,B]]")
+  eq decodeMR(
+       metarule("[P,Q,R],[P,A,B],[[Q,A,B],[R,B]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        mAtom(Q, argVar(A) argVar(B))
+        mAtom(R, argVar(B))
+      )
+    ) .
+
+  --- curry1: P(A,B) :- Q(A,B,Func).
+  ---   metarule("[P,Q,Func],[P,A,B],[[Q,A,B,Func]]")
+  eq decodeMR(
+       metarule("[P,Q,Func],[P,A,B],[[Q,A,B,Func]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        --- 3-ary: Q(A,B,Func) is represented as Q(A,B,C)
+        mAtom(Q, argVar(A) argVar(B) argVar(C))
+      )
+    ) .
+
+  --- curry2: P(A,B) :- Q(A,B,Cond,Func).
+  ---   metarule("[P,Q,Cond,Func],[P,A,B],[[Q,A,B,Cond,Func]]")
+  eq decodeMR(
+       metarule("[P,Q,Cond,Func],[P,A,B],[[Q,A,B,Cond,Func]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        --- 4-ary: Q(A,B,Cond,Func) is represented as Q(A,B,A,B)
+        mAtom(Q, argVar(A) argVar(B) argVar(A) argVar(B))
+      )
+    ) .
+
+  --- curry3: P(A,B) :- Q(A,B,Cond,Then,Else).
+  ---   metarule("[P,Q,Cond,Then,Else],[P,A,B],[[Q,A,B,Cond,Then,Else]]")
+  eq decodeMR(
+       metarule("[P,Q,Cond,Then,Else],[P,A,B],[[Q,A,B,Cond,Then,Else]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        --- 5-ary: Q(A,B,Cond,Then,Else) is represented as Q(A,B,A,B,C)
+        mAtom(Q, argVar(A) argVar(B) argVar(A) argVar(B) argVar(C))
+      )
+    ) .
+
+  --- tailrec: P(A,B) :- Q(A,C), P(C,B).
+  ---   metarule("[P,Q],[P,A,B],[[Q,A,C],[P,C,B]]")
+  eq decodeMR(
+       metarule("[P,Q],[P,A,B],[[Q,A,C],[P,C,B]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        mAtom(Q, argVar(A) argVar(C))
+        mAtom(P, argVar(C) argVar(B))
+      )
+    ) .
+
+  --- dident: P(A,B) :- Q(A,B), R(A,B). (ignoring Q =\= R)
+  ---   metarule("[P,Q,R],[P,A,B],[[Q,A,B],[R,A,B]]")
+  eq decodeMR(
+       metarule("[P,Q,R],[P,A,B],[[Q,A,B],[R,A,B]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        mAtom(Q, argVar(A) argVar(B))
+        mAtom(R, argVar(A) argVar(B))
+      )
+    ) .
+
+  --- inverse: P(A,B) :- Q(B,A).
+  ---   metarule("[P,Q],[P,A,B],[[Q,B,A]]")
+  eq decodeMR(
+       metarule("[P,Q],[P,A,B],[[Q,B,A]]")
+     ) =
+    schema(
+      mHead(P, argVar(A) argVar(B)),
+      mBody(
+        mAtom(Q, argVar(B) argVar(A))
+      )
+    ) .
+
+endfm

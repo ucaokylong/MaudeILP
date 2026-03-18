@@ -1,6 +1,6 @@
 fmod ILP-grandparent is
   protecting ILP-CORE .
-
+    protecting ILP-MR-SCHEMA .
   op BK  : -> AtomList .
   op POS : -> AtomList .
   op NEG : -> AtomList .
