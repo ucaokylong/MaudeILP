@@ -60,16 +60,22 @@ This is a functional module (fmod), so it only defines data structures and funct
 sort PredName Const TermList Atom AtomList Metarule MRList .
 ```
 - **PredName** – predicate symbols with arity  
-  Examples: `pred("mother",2)`, `pred("grandparent",2)`.
+  **Examples:**  
+  - `pred("mother",2)`  
+  - `pred("grandparent",2)`
 
 - **Const** – Herbrand constants  
-  Examples: `const("ann")`, `const("amy")`, `const("green")`.
+  **Examples:**  
+  - `const("ann")`  
+  - `const("amy")`  
+  - `const("green")`
 
 - **TermList** – list of arguments of a literal  
-  Example: `const("ann") const("amy")` encodes the tuple $(ann, amy)$.
+  **Example:**  
+  - `const("ann") const("amy")` encodes the tuple $(ann, amy)$
 
 - **Atom** – a ground literal $p(t_1, \dots, t_n)$ encoded as:  
-  `atom(PredName, TermList)`.
+  - `atom(PredName, TermList)`
 
 - **AtomList** – list of atoms, used later to represent BK, POS, NEG.
 
