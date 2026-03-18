@@ -4,35 +4,6 @@ This repository was created to implement the Inductive Logic Programming (ILP) a
 ## ILP-CORE: Canonical Maude Encoding for Metagol ILP Tasks
 
 This section explains how to encode a Metagol-style ILP task into a **canonical Maude representation** using the `ILP-CORE` module.
+See [ILP-CORE details](docs/ILP-CORE.md) for the full explanation.
 
-### 1. The ILP-CORE functional module
 
-```maude
-fmod ILP-CORE is
-  sort PredName Const TermList Atom AtomList Metarule MRList .
-
-  subsort Atom < AtomList .
-  subsort Metarule < MRList .
-
-  op nilA : -> AtomList [ctor] .
-  op __   : AtomList AtomList -> AtomList [assoc id: nilA] .
-
-  op nilM : -> MRList [ctor] .
-  op __   : MRList MRList -> MRList [assoc id: nilM] .
-
-  op nilT : -> TermList [ctor] .
-  op __   : TermList TermList -> TermList [assoc id: nilT] .
-
-  op pred  : String Nat -> PredName [ctor] .
-  op const : String      -> Const    [ctor] .
-
-  op atom  : PredName TermList -> Atom [ctor] .
-
-  op metarule : String -> Metarule [ctor] .
-endfm
-
-```
-High-level idea
-
-ILP-CORE defines a generic vocabulary (types and constructors) for representing any Metagol ILP task as data in Maude.
-Concrete tasks only need to instantiate this vocabulary with their own background knowledge, examples, and metarules.
