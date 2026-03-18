@@ -120,3 +120,14 @@ Attribute `[assoc id: nilX]` makes `__` associative with identity `nilX`, so we 
 without extra parentheses or separators.
 
 This is the standard Maude idiom for lists/multisets.
+
+### 2.3 Predicates, Constants, and Atoms
+
+```text
+op pred  : String Nat -> PredName [ctor] .
+op const : String      -> Const    [ctor] .
+
+op atom  : PredName TermList -> Atom [ctor] .
+```
+-- `pred("mother",2)` encodes the predicate symbol mother/2.
+-- `const("ann")` encodes the constant symbol ann.
