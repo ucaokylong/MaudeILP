@@ -59,5 +59,25 @@ This is a functional module (fmod), so it only defines data structures and funct
 ```
 sort PredName Const TermList Atom AtomList Metarule MRList .
 ```
-PredName – predicate symbols with arityExamples: pred("mother",2), pred("grandparent",2).Const – Herbrand constantsExamples: const("ann"), const("amy"), const("green").TermList – list of arguments of a literalExample: const("ann") const("amy") encodes the tuple $(ann, amy)$.Atom – a ground literal $p(t_1, \dots, t_n)$ encoded as:atom(PredName, TermList).AtomList – list of atoms, used later to represent BK, POS, NEG.Metarule – one metarule at the data level.MRList – list of metarules.This gives us a uniform “ILP universe” inside Maude: every Prolog literal or metarule will be translated into one of these sorts.
+**PredName** – predicate symbols with arity  
+Examples: `pred("mother",2)`, `pred("grandparent",2)`.
+
+**Const** – Herbrand constants  
+Examples: `const("ann")`, `const("amy")`, `const("green")`.
+
+**TermList** – list of arguments of a literal  
+Example: `const("ann") const("amy")` encodes the tuple $(ann, amy)$.
+
+**Atom** – a ground literal $p(t_1, \dots, t_n)$ encoded as:  
+`atom(PredName, TermList)`.
+
+**AtomList** – list of atoms, used later to represent BK, POS, NEG.
+
+**Metarule** – one metarule at the data level.
+
+**MRList** – list of metarules.
+
+---
+
+This gives us a uniform “ILP universe” inside Maude: every Prolog literal or metarule will be translated into one of these sorts.
 
