@@ -146,3 +146,23 @@ More generally, a literal `p(t1,...,tn)` becomes:
 atom(pred("p", n), const("t1") ... const("tn"))
 ```
 where the `TermList const("t1") ... const("tn")` stores all arguments.
+
+### Metarules as data
+```
+op metarule : String -> Metarule [ctor] .
+```
+Metagol metarule declaration:
+```
+metarule([P,Q],[P,A,B],[[Q,A,B]]).
+```
+becomes:
+```
+metarule("[P,Q],[P,A,B],[[Q,A,B]]") : Metarule
+```
+- The String keeps the Prolog-style schema unchanged.
+- The learning engine (later) can parse or pattern-match this string to:
+-- classify the metarule (e.g. `ident, chain`),
+
+-- apply substitutions like `P ↦ grandparent, Q ↦ mother`, etc.
+
+ILP-CORE does not commit to a specific internal metarule structure. It just offers the type Metarule and the constructor metarule to store them.
