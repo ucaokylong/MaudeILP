@@ -30,3 +30,9 @@ fmod ILP-CORE is
 
   op metarule : String -> Metarule [ctor] .
 endfm
+
+```
+High-level idea
+
+ILP-CORE defines a generic vocabulary (types and constructors) for representing any Metagol ILP task as data in Maude.
+Concrete tasks only need to instantiate this vocabulary with their own background knowledge, examples, and metarules.
