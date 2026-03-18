@@ -130,4 +130,19 @@ op const : String      -> Const    [ctor] .
 op atom  : PredName TermList -> Atom [ctor] .
 ```
 -- `pred("mother",2)` encodes the predicate symbol mother/2.
+
 -- `const("ann")` encodes the constant symbol ann.
+
+A ground literal like:
+```
+mother(ann,amy).
+```
+is encoded as:
+```
+atom(pred("mother",2), const("ann") const("amy"))
+```
+More generally, a literal `p(t1,...,tn)` becomes:
+```
+atom(pred("p", n), const("t1") ... const("tn"))
+```
+where the `TermList const("t1") ... const("tn")` stores all arguments.
