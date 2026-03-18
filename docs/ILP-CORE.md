@@ -86,3 +86,37 @@ sort PredName Const TermList Atom AtomList Metarule MRList .
 
 This gives us a uniform “ILP universe” inside Maude: every Prolog literal or metarule will be translated into one of these sorts.
 
+### 2.2 Lists for atoms, metarules, and terms
+```
+subsort Atom < AtomList .
+subsort Metarule < MRList .
+```
+-`Atom < AtomList:` a single Atom is also an AtomList of length 1.
+
+-`Metarule < MRList:` a single Metarule is also an MRList of length 1.
+List constructors:
+```
+op nilA : -> AtomList [ctor] .
+op __   : AtomList AtomList -> AtomList [assoc id: nilA] .
+
+op nilM : -> MRList [ctor] .
+op __   : MRList MRList -> MRList [assoc id: nilM] .
+
+op nilT : -> TermList [ctor] .
+op __   : TermList TermList -> TermList [assoc id: nilT] .
+```
+- **nilA, nilM, nilT** – empty lists for atoms, metarules, and terms.
+
+- **__** – infix list constructor for each list sort.
+
+Attribute `[assoc id: nilX]` makes `__` associative with identity `nilX`, so we can write:
+
+`atom1 atom2 atom3`  
+-- an AtomList of three atoms
+
+`const("ann") const("amy")`  
+-- a TermList of two arguments
+
+without extra parentheses or separators.
+
+This is the standard Maude idiom for lists/multisets.
