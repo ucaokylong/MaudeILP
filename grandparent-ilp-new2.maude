@@ -1,0 +1,73 @@
+fmod GRANDPARENT-ILP2 is
+  protecting METARULE-SURFACE2 .
+
+  --- User khai báo SOSlot theo ý mình
+  ops p q r s t : -> SOSlot [ctor] .
+
+  --- User khai báo FOSlot theo ý mình
+  ops a b c d e : -> FOSlot [ctor] .
+
+  --- Entities
+  sort Entity Person .
+  subsort Person < Entity .
+
+  ops ann amy andy bob steve linda gavin amelia spongebob : -> Person [ctor] .
+
+  --- Predicate symbols as data
+  sort Pred .
+  ops mother father grandparent : -> Pred [ctor] .
+
+  --- Atoms and atom lists
+  sort Atom AtomList .
+  subsort Atom < AtomList .
+
+  op nilAtom : -> AtomList [ctor] .
+  op _;_     : AtomList AtomList -> AtomList [assoc id: nilAtom ctor] .
+
+  --- Predicate symbols as atom constructors
+  ops mother father grandparent : Entity Entity -> Atom [ctor] .
+
+  --- Background knowledge
+  op BK : -> AtomList [ctor] .
+  eq BK =
+    mother(ann, amy)        ;
+    mother(ann, andy)       ;
+    mother(amy, amelia)     ;
+    mother(amy, bob)        ;
+    mother(linda, gavin)    ;
+    father(steve, amy)      ;
+    father(steve, andy)     ;
+    father(andy, spongebob) ;
+    father(gavin, amelia)   .
+
+  --- Positive examples
+  op POS : -> AtomList [ctor] .
+  eq POS =
+    grandparent(ann, amelia)      ;
+    grandparent(steve, amelia)    ;
+    grandparent(steve, spongebob) ;
+    grandparent(linda, amelia)    .
+
+  --- Negative examples
+  op NEG : -> AtomList [ctor] .
+  eq NEG =
+    grandparent(amy, amelia) .
+
+  --- Metarules
+  op MRS : -> MetaruleList [ctor] .
+
+eq MRS =
+  ---metarule((p,a),       (q,a))              --- monadic
+  metarule((p,a,b),   (q,a,b))            --- identity
+  ---; metarule((p,a,b),   (q,b,a))            --- inverse
+  ---; metarule((p,a,b),   (q,a),   (r,a,b))  --- precon
+  ---; metarule((p,a,b),   (q,a,b), (r,b))    --- postcon
+  ; metarule((p,a,b),   (q,a,c), (r,c,b)) .  --- chain
+  ---; metarule((p,a,b),   (q,a,c), (p,c,b))  --- tailrec
+  ---; metarule((p,a,b),   (q,a,b), (q,b,a))  --- dident
+  ---; metarule((p,a,b),   (q,r,a,b))         --- curry  (R đứng đầu)
+  ---; metarule((p,a,b),   (q,a,r,b))         --- curry2 (R ở giữa)
+  ---; metarule((p,a,b),   (q,a,b,r)) .       --- curry3 (R đứng cuối)
+
+
+endfm
