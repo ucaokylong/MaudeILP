@@ -2,24 +2,20 @@ fmod METARULE-SURFACE2 is
 
   sorts SOSlot FOSlot .
 
-  --- Arg = FOSlot hoặc SOSlot (cho curry)
   sort Arg .
   subsort FOSlot < Arg .
   subsort SOSlot < Arg .
 
-  --- SlotAtom: hỗ trợ unary / binary / ternary
   sort SlotAtom .
-  op (_,_)     : SOSlot Arg -> SlotAtom [ctor] .           --- P(A)
-  op (_,_,_)   : SOSlot Arg Arg -> SlotAtom [ctor] .       --- P(A,B)
-  op (_,_,_,_) : SOSlot Arg Arg Arg -> SlotAtom [ctor] .   --- P(A,B,C) / curry
+  op `(_`,_`)       : SOSlot Arg -> SlotAtom [ctor] .
+  op `(_`,_`,_`)    : SOSlot Arg Arg -> SlotAtom [ctor] .
+  op `(_`,_`,_`,_`) : SOSlot Arg Arg Arg -> SlotAtom [ctor] .
 
-  --- Metarule: ngoặc đầu = head, ngoặc sau = body (tối đa 3 body atoms)
   sort Metarule .
-  op metarule(_,_)     : SlotAtom SlotAtom -> Metarule [ctor] .
-  op metarule(_,_,_)   : SlotAtom SlotAtom SlotAtom -> Metarule [ctor] .
-  op metarule(_,_,_,_) : SlotAtom SlotAtom SlotAtom SlotAtom -> Metarule [ctor] .
+  op metarule`(_`,_`)       : SlotAtom SlotAtom -> Metarule [ctor] .
+  op metarule`(_`,_`,_`)    : SlotAtom SlotAtom SlotAtom -> Metarule [ctor] .
+  op metarule`(_`,_`,_`,_`) : SlotAtom SlotAtom SlotAtom SlotAtom -> Metarule [ctor] .
 
-  --- MetaruleList
   sort MetaruleList .
   subsort Metarule < MetaruleList .
   op nilMR : -> MetaruleList [ctor] .

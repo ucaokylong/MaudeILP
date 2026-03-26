@@ -1,16 +1,17 @@
+load METARULE-SURFACE2.maude
+
 fmod GRANDPARENT-ILP2 is
   protecting METARULE-SURFACE2 .
 
-  --- User khai báo SOSlot theo ý mình
+  --- SOSlot
   ops p q r s t : -> SOSlot [ctor] .
 
-  --- User khai báo FOSlot theo ý mình
+  --- FOSlot
   ops a b c d e : -> FOSlot [ctor] .
 
   --- Entities
   sort Entity Person .
   subsort Person < Entity .
-
   ops ann amy andy bob steve linda gavin amelia spongebob : -> Person [ctor] .
 
   --- Predicate symbols as data
@@ -20,7 +21,6 @@ fmod GRANDPARENT-ILP2 is
   --- Atoms and atom lists
   sort Atom AtomList .
   subsort Atom < AtomList .
-
   op nilAtom : -> AtomList [ctor] .
   op _;_     : AtomList AtomList -> AtomList [assoc id: nilAtom ctor] .
 
@@ -50,24 +50,13 @@ fmod GRANDPARENT-ILP2 is
 
   --- Negative examples
   op NEG : -> AtomList [ctor] .
-  eq NEG =
-    grandparent(amy, amelia) .
+  eq NEG = grandparent(amy, amelia) .
 
   --- Metarules
   op MRS : -> MetaruleList [ctor] .
-
-eq MRS =
-  ---metarule((p,a),       (q,a))              --- monadic
-  metarule((p,a,b),   (q,a,b))            --- identity
-  ---; metarule((p,a,b),   (q,b,a))            --- inverse
-  ---; metarule((p,a,b),   (q,a),   (r,a,b))  --- precon
-  ---; metarule((p,a,b),   (q,a,b), (r,b))    --- postcon
-  ; metarule((p,a,b),   (q,a,c), (r,c,b)) .  --- chain
-  ---; metarule((p,a,b),   (q,a,c), (p,c,b))  --- tailrec
-  ---; metarule((p,a,b),   (q,a,b), (q,b,a))  --- dident
-  ---; metarule((p,a,b),   (q,r,a,b))         --- curry  (R đứng đầu)
-  ---; metarule((p,a,b),   (q,a,r,b))         --- curry2 (R ở giữa)
-  ---; metarule((p,a,b),   (q,a,b,r)) .       --- curry3 (R đứng cuối)
-
+  eq MRS =
+    metarule((p,a,b), (q,a,b))              --- identity
+    ; metarule((p,a,b), (q,a,c), (r,c,b)) . --- chain
 
 endfm
+

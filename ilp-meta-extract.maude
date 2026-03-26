@@ -1,0 +1,67 @@
+load grandparent-ilp-new2.maude
+
+fmod ILP-META-EXTRACT is
+  protecting META-LEVEL .
+  protecting GRANDPARENT-ILP2 .
+
+  vars T T1 T2 T3 : Term .
+  var  TL         : TermList .
+  var  Q          : Qid .
+
+  op GP-MOD : -> Module .
+  eq GP-MOD = upModule('GRANDPARENT-ILP2, true) .
+
+  --- dùng upTerm trực tiếp — không cần metaReduce
+  op BK-Term  : -> Term .
+  op POS-Term : -> Term .
+  op NEG-Term : -> Term .
+  op MRS-Term : -> Term .
+
+  eq BK-Term  = upTerm(BK) .
+  eq POS-Term = upTerm(POS) .
+  eq NEG-Term = upTerm(NEG) .
+  eq MRS-Term = upTerm(MRS) .
+
+  op getMR1 : Term -> Term .
+  op getMR2 : Term -> Term .
+  eq getMR1('_;_[T1, T2]) = T1 .
+  eq getMR2('_;_[T1, T2]) = T2 .
+
+  op getHead : Term -> Term .
+  eq getHead(Q[T1, T2])     = T1 .
+  eq getHead(Q[T1, T2, T3]) = T1 .
+
+  op getBody : Term -> TermList .
+  eq getBody(Q[T1, T2])     = T2 .
+  eq getBody(Q[T1, T2, T3]) = T2, T3 .
+
+  op getSOSlot : Term -> Term .
+  eq getSOSlot(Q[T1, T2])     = T1 .
+  eq getSOSlot(Q[T1, T2, T3]) = T1 .
+
+  op getFO1 : Term -> Term .
+  op getFO2 : Term -> Term .
+  eq getFO1(Q[T1, T2])     = T2 .
+  eq getFO1(Q[T1, T2, T3]) = T2 .
+  eq getFO2(Q[T1, T2, T3]) = T3 .
+
+  op getOpName : Term -> Qid .
+  eq getOpName(Q[TL]) = Q .
+  eq getOpName(Q)     = Q .
+
+endfm
+
+red MRS-Term .
+red BK-Term .
+red POS-Term .
+red getMR1(MRS-Term) .
+red getMR2(MRS-Term) .
+red getHead(getMR1(MRS-Term)) .
+red getBody(getMR1(MRS-Term)) .
+red getHead(getMR2(MRS-Term)) .
+red getBody(getMR2(MRS-Term)) .
+red getSOSlot(getHead(getMR1(MRS-Term))) .
+red getFO1(getHead(getMR1(MRS-Term))) .
+red getFO2(getHead(getMR1(MRS-Term))) .
+red getOpName(MRS-Term) .
+red getOpName(getMR1(MRS-Term)) .
