@@ -1,34 +1,32 @@
-load METARULE-SURFACE2.maude
+load ILP-CORE.maude
 
-fmod GRANDPARENT-ILP2 is
-  protecting METARULE-SURFACE2 .
+fmod GRANDPARENT-ILP-NEW2 is
+  protecting ILP-CORE .
 
-  --- SOSlot
-  ops p q r s t : -> SOSlot [ctor] .
+  --- ============================================================
+  --- Grandparent ILP instance
+  --- This module only supplies problem-specific data.
+  --- ============================================================
 
-  --- FOSlot
-  ops a b c d e : -> FOSlot [ctor] .
-
-  --- Entities
-  sort Entity Person .
+  --- Persons / entities
+  sort Person .
   subsort Person < Entity .
+
   ops ann amy andy bob steve linda gavin amelia spongebob : -> Person [ctor] .
 
   --- Predicate symbols as data
-  sort Pred .
   ops mother father grandparent : -> Pred [ctor] .
 
-  --- Atoms and atom lists
-  sort Atom AtomList .
-  subsort Atom < AtomList .
-  op nilAtom : -> AtomList [ctor] .
-  op _;_     : AtomList AtomList -> AtomList [assoc id: nilAtom ctor] .
+  --- Optional predicate declarations
+  eq PREDS =
+    predDecl(mother, binary) ;
+    predDecl(father, binary) ;
+    predDecl(grandparent, binary) .
 
-  --- Predicate symbols as atom constructors
+  --- Object-level atom constructors for this problem
   ops mother father grandparent : Entity Entity -> Atom [ctor] .
 
   --- Background knowledge
-  op BK : -> AtomList [ctor] .
   eq BK =
     mother(ann, amy)        ;
     mother(ann, andy)       ;
@@ -41,7 +39,6 @@ fmod GRANDPARENT-ILP2 is
     father(gavin, amelia)   .
 
   --- Positive examples
-  op POS : -> AtomList [ctor] .
   eq POS =
     grandparent(ann, amelia)      ;
     grandparent(steve, amelia)    ;
@@ -49,14 +46,12 @@ fmod GRANDPARENT-ILP2 is
     grandparent(linda, amelia)    .
 
   --- Negative examples
-  op NEG : -> AtomList [ctor] .
-  eq NEG = grandparent(amy, amelia) .
+  eq NEG =
+    grandparent(amy, amelia) .
 
   --- Metarules
-  op MRS : -> MetaruleList [ctor] .
-  eq MRS =
-    metarule((p,a,b), (q,a,b))              --- identity
-    ; metarule((p,a,b), (q,a,c), (r,c,b)) . --- chain
+  eq METARULES =
+    metarule((p,a,b), (q,a,b)) ;
+    metarule((p,a,b), (q,a,c), (r,c,b)) .
 
 endfm
-

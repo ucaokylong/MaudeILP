@@ -1,0 +1,69 @@
+load METARULE-SURFACE2.maude
+
+fmod TEST-METARULE-SURFACE2 is
+  protecting METARULE-SURFACE2 .
+
+  --- ----------------------------------------------------------
+  --- Slot variable tests
+  --- ----------------------------------------------------------
+  op testPredSlot1 : -> SlotVar .
+  eq testPredSlot1 = p .
+
+  op testPredSlot2 : -> SlotVar .
+  eq testPredSlot2 = q .
+
+  op testArgSlot1 : -> SlotVar .
+  eq testArgSlot1 = a .
+
+  op testArgSlot2 : -> SlotVar .
+  eq testArgSlot2 = b .
+
+  op testQidSlot1 : -> SlotVar .
+  eq testQidSlot1 = 'p .
+
+  op testQidSlot2 : -> SlotVar .
+  eq testQidSlot2 = 'x .
+
+  --- ----------------------------------------------------------
+  --- SlotAtom tests
+  --- ----------------------------------------------------------
+  op testSA1 : -> SlotAtom .
+  eq testSA1 = (p,a) .
+
+  op testSA2 : -> SlotAtom .
+  eq testSA2 = (p,a,b) .
+
+  op testSA3 : -> SlotAtom .
+  eq testSA3 = (p,a,b,c) .
+
+  op testSA4 : -> SlotAtom .
+  eq testSA4 = ('p,'a,'b) .
+
+  op testSA5 : -> SlotAtom .
+  eq testSA5 = (p,'x,'y) .
+
+  --- ----------------------------------------------------------
+  --- Metarule tests
+  --- ----------------------------------------------------------
+  op testMR1 : -> Metarule .
+  eq testMR1 = metarule((p,a,b), (q,a,b)) .
+
+  op testMR2 : -> Metarule .
+  eq testMR2 = metarule((p,a,b), (q,a,c), (r,c,b)) .
+
+  op testMR3 : -> Metarule .
+  eq testMR3 = metarule(('p,'a,'b), ('q,'a,'b)) .
+
+  op testMR4 : -> Metarule .
+  eq testMR4 = metarule((p,'x,'y), (q,'x,'z), (r,'z,'y)) .
+
+  --- ----------------------------------------------------------
+  --- MetaruleList tests
+  --- ----------------------------------------------------------
+  op testMRL1 : -> MetaruleList .
+  eq testMRL1 =
+    metarule((p,a,b), (q,a,b))
+    ;
+    metarule((p,a,b), (q,a,c), (r,c,b)) .
+
+endfm

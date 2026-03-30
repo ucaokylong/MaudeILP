@@ -1,24 +1,36 @@
+--- ============================================================
+--- METARULE-SURFACE2.maude (NEW)
+--- Dùng cho GRANDPARENT-ILP-NEW2
+--- ============================================================
+
 fmod METARULE-SURFACE2 is
+  protecting QID .
 
-  sorts SOSlot FOSlot .
+  sort SlotVar .
+  subsort Qid < SlotVar .
 
-  sort Arg .
-  subsort FOSlot < Arg .
-  subsort SOSlot < Arg .
+  sort PredSlot ArgSlot .
+  subsort PredSlot < SlotVar .
+  subsort ArgSlot  < SlotVar .
+
+  --- Pre-declared slot names
+  ops p q r s t : -> PredSlot [ctor] .
+  ops a b c d e : -> ArgSlot  [ctor] .
 
   sort SlotAtom .
-  op `(_`,_`)       : SOSlot Arg -> SlotAtom [ctor] .
-  op `(_`,_`,_`)    : SOSlot Arg Arg -> SlotAtom [ctor] .
-  op `(_`,_`,_`,_`) : SOSlot Arg Arg Arg -> SlotAtom [ctor] .
+  op `(_`,_`)       : SlotVar SlotVar -> SlotAtom [ctor] .
+  op `(_`,_`,_`)    : SlotVar SlotVar SlotVar -> SlotAtom [ctor] .
+  op `(_`,_`,_`,_`) : SlotVar SlotVar SlotVar SlotVar -> SlotAtom [ctor] .
 
-  sort Metarule .
+  sort Metarule MetaruleList .
+  subsort Metarule < MetaruleList .
+
+  op nilMR : -> MetaruleList [ctor] .
+  op _;_   : MetaruleList MetaruleList -> MetaruleList
+             [assoc id: nilMR ctor] .
+
   op metarule`(_`,_`)       : SlotAtom SlotAtom -> Metarule [ctor] .
   op metarule`(_`,_`,_`)    : SlotAtom SlotAtom SlotAtom -> Metarule [ctor] .
   op metarule`(_`,_`,_`,_`) : SlotAtom SlotAtom SlotAtom SlotAtom -> Metarule [ctor] .
-
-  sort MetaruleList .
-  subsort Metarule < MetaruleList .
-  op nilMR : -> MetaruleList [ctor] .
-  op _;_   : MetaruleList MetaruleList -> MetaruleList [assoc id: nilMR ctor] .
 
 endfm

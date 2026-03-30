@@ -1,22 +1,36 @@
+load METARULE-SURFACE2.maude
+
 fmod ILP-CORE is
-  sort PredName Const TermList Atom AtomList Metarule MRList .
+  protecting METARULE-SURFACE2 .
 
+  sort Entity .
+  sort Pred .
+
+  sort Arity .
+  ops unary binary ternary : -> Arity [ctor] .
+
+  sort PredDecl PredDeclList .
+  subsort PredDecl < PredDeclList .
+
+  op predDecl    : Pred Arity -> PredDecl [ctor] .
+  op nilPredDecl : -> PredDeclList [ctor] .
+  op _;_         : PredDeclList PredDeclList -> PredDeclList [assoc id: nilPredDecl ctor] .
+
+  op PREDS : -> PredDeclList .
+
+  sort Atom AtomList .
   subsort Atom < AtomList .
-  subsort Metarule < MRList .
 
-  op nilA : -> AtomList [ctor] .
-  op __   : AtomList AtomList -> AtomList [assoc id: nilA] .
+  op nilAtom : -> AtomList [ctor] .
+  op _;_     : AtomList AtomList -> AtomList [assoc id: nilAtom ctor] .
 
-  op nilM : -> MRList [ctor] .
-  op __   : MRList MRList -> MRList [assoc id: nilM] .
+  op atom1 : Pred Entity -> Atom [ctor] .
+  op atom2 : Pred Entity Entity -> Atom [ctor] .
+  op atom3 : Pred Entity Entity Entity -> Atom [ctor] .
 
-  op nilT : -> TermList [ctor] .
-  op __   : TermList TermList -> TermList [assoc id: nilT] .
+  op BK        : -> AtomList .
+  op POS       : -> AtomList .
+  op NEG       : -> AtomList .
+  op METARULES : -> MetaruleList .
 
-  op pred  : String Nat -> PredName [ctor] .
-  op const : String      -> Const    [ctor] .
-
-  op atom  : PredName TermList -> Atom [ctor] .
-
-  op metarule : String -> Metarule [ctor] .
 endfm
