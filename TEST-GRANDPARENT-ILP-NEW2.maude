@@ -1,136 +1,17 @@
-load METARULE-SURFACE2.maude
-load ILP-CORE.maude
+load METARULE.maude
 load GRANDPARENT-ILP-NEW2.maude
 
-fmod TEST-GRANDPARENT-ILP-NEW2 is
-  protecting GRANDPARENT-ILP-NEW2 .
+select GRANDPARENT-ILP-NEW2 .
 
-  --- ----------------------------------------------------------
-  --- Test PREDS
-  --- ----------------------------------------------------------
-  op testPREDS : -> PredDeclList .
-  eq testPREDS = PREDS .
-
-  --- ----------------------------------------------------------
-  --- Test BK
-  --- ----------------------------------------------------------
-  op testBK : -> AtomList .
-  eq testBK = BK .
-
-  --- ----------------------------------------------------------
-  --- Test POS
-  --- ----------------------------------------------------------
-  op testPOS : -> AtomList .
-  eq testPOS = POS .
-
-  --- ----------------------------------------------------------
-  --- Test NEG
-  --- ----------------------------------------------------------
-  op testNEG : -> AtomList .
-  eq testNEG = NEG .
-
-  --- ----------------------------------------------------------
-  --- Test METARULES
-  --- ----------------------------------------------------------
-  op testMETARULES : -> MetaruleList .
-  eq testMETARULES = METARULES .
-
-  --- ----------------------------------------------------------
-  --- Test single atoms
-  --- ----------------------------------------------------------
-  op testMotherAnnAmy   : -> Atom .
-  eq testMotherAnnAmy   = mother(ann, amy) .
-
-  op testFatherSteveAmy : -> Atom .
-  eq testFatherSteveAmy = father(steve, amy) .
-
-  op testGpAnnAmelia    : -> Atom .
-  eq testGpAnnAmelia    = grandparent(ann, amelia) .
-
-  --- ----------------------------------------------------------
-  --- Test metarules individually
-  --- ----------------------------------------------------------
-  op testMR1 : -> Metarule .
-  eq testMR1 = metarule((p,a,b), (q,a,b)) .
-
-  op testMR2 : -> Metarule .
-  eq testMR2 = metarule((p,a,b), (q,a,c), (r,c,b)) .
-
-  op testMR3 : -> Metarule .
-  eq testMR3 = metarule(('p,'a,'b), ('q,'a,'b)) .
-
-  op testMR4 : -> Metarule .
-  eq testMR4 = metarule((p,'x,'y), (q,'x,'z), (r,'z,'y)) .
-
-  --- ----------------------------------------------------------
-  --- Equality checks: verify stored data matches expectations
-  --- ----------------------------------------------------------
-  op checkBK : -> Bool .
-  eq checkBK = BK ==
-    mother(ann, amy)        ;
-    mother(ann, andy)       ;
-    mother(amy, amelia)     ;
-    mother(amy, bob)        ;
-    mother(linda, gavin)    ;
-    father(steve, amy)      ;
-    father(steve, andy)     ;
-    father(andy, spongebob) ;
-    father(gavin, amelia)   .
-
-  op checkPOS : -> Bool .
-  eq checkPOS = POS ==
-    grandparent(ann, amelia)      ;
-    grandparent(steve, amelia)    ;
-    grandparent(steve, spongebob) ;
-    grandparent(linda, amelia)    .
-
-  op checkNEG : -> Bool .
-  eq checkNEG = NEG == grandparent(amy, amelia) .
-
-  op checkMETARULES : -> Bool .
-  eq checkMETARULES = METARULES ==
-    metarule((p,a,b), (q,a,b)) ;
-    metarule((p,a,b), (q,a,c), (r,c,b)) .
-
-  op checkPREDS : -> Bool .
-  eq checkPREDS = PREDS ==
-    predDecl(mother, binary) ;
-    predDecl(father, binary) ;
-    predDecl(grandparent, binary) .
-
-  --- ----------------------------------------------------------
-  --- Master check: all checks pass
-  --- ----------------------------------------------------------
-  op allChecksPass : -> Bool .
-  eq allChecksPass =
-    checkBK and checkPOS and checkNEG and checkMETARULES and checkPREDS .
-
-endfm
-
---- ==============================================================
---- Run all tests
---- ==============================================================
-select TEST-GRANDPARENT-ILP-NEW2 .
-
-red testPREDS .
-red testBK .
-red testPOS .
-red testNEG .
-red testMETARULES .
-
-red testMotherAnnAmy .
-red testFatherSteveAmy .
-red testGpAnnAmelia .
-
-red testMR1 .
-red testMR2 .
-red testMR3 .
-red testMR4 .
-
-red checkBK .
-red checkPOS .
-red checkNEG .
-red checkMETARULES .
-red checkPREDS .
-
-red allChecksPass .
+reduce mother(ann, amy) .
+reduce BK .
+reduce POS .
+reduce NEG .
+reduce [P | Q] .
+reduce [P | Q | R] .
+reduce [P : A,B] .
+reduce [Q : A,B] .
+reduce [Q : A,C] [R : C,B] .
+reduce metarule([P | Q],     [P : A,B], [Q : A,B]) .
+reduce metarule([P | Q | R], [P : A,B], [Q : A,C] [R : C,B]) .
+reduce METARULES .

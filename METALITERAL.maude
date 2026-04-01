@@ -1,0 +1,44 @@
+load METAVAR.maude
+
+fmod METALITERAL-BASE is
+  protecting METAVAR .
+
+  --- FirstOrderVarList: danh sach argument variables
+  --- Dung dau phay lam separator
+  --- Vi du: A,B   A,B,C   A,B,Cond,Func
+  sort FirstOrderVarList .
+  subsort FirstOrderVar < FirstOrderVarList .
+  op _,_ : FirstOrderVar FirstOrderVarList -> FirstOrderVarList [ctor assoc] .
+
+  --- MetaLiteral: [SecondOrderVar : FirstOrderVarList]
+  --- Vi tri truoc dau : = SecondOrderVar (predicate variable)
+  --- Vi tri sau dau :  = FirstOrderVarList (argument variables)
+  --- Vi du:
+  ---   [P:A,B]              arity 2
+  ---   [P:A,B,C]            arity 3
+  ---   [P:A,B,Cond,Func]    arity 4
+  sort MetaLiteral .
+  op `[_:_`] : SecondOrderVar FirstOrderVarList -> MetaLiteral [ctor] .
+
+endfm
+
+--- View de dung LIST{MetaLiteral} cho MetaBody
+view MetaLiteral from TRIV to METALITERAL-BASE is
+  sort Elt to MetaLiteral .
+endv
+
+fmod METALITERAL is
+  protecting METALITERAL-BASE .
+
+  --- MetaBody: danh sach MetaLiterals cua body
+  --- Dung built-in LIST voi dau cach lam separator
+  --- Vi du:
+  ---   [Q:A,B]                    1 literal
+  ---   [Q:A,C] [R:C,B]            2 literals
+  protecting LIST{MetaLiteral} * (
+    sort NeList{MetaLiteral} to NeMetaBody,
+    sort List{MetaLiteral}   to MetaBody,
+    op nil                   to nilMB
+  ) .
+
+endfm

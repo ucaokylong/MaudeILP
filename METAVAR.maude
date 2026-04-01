@@ -1,0 +1,18 @@
+load ILP-CORE.maude
+
+fmod METAVAR is
+  protecting ILP-CORE .
+
+  --- SecondOrderVar: bien bac 2 (predicate-level)
+  --- Pred la truong hop pho bien nhat
+  --- Mo rong: sort Func . subsort Func < SecondOrderVar .
+  sort SecondOrderVar .
+  subsort Pred < SecondOrderVar .
+
+  --- FirstOrderVar: bien bac 1 (argument-level)
+  --- Entity la truong hop pho bien nhat
+  --- Mo rong: sort Func . subsort Func < FirstOrderVar .
+  sort FirstOrderVar .
+  subsort Entity < FirstOrderVar .
+
+endfm

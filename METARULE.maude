@@ -1,0 +1,46 @@
+load METALITERAL.maude
+
+fmod METARULE-BASE is
+  protecting METALITERAL .
+
+  --- SecondOrderVarList: danh sach bien bac 2 cua metarule
+  --- Dung dau | lam separator de tranh conflict voi dau phay
+  --- Vi du: [P|Q]   [P|Q|R]   [P|Q|R|F]
+  sort SecondOrderVarList .
+  subsort SecondOrderVar < SecondOrderVarList .
+  op _|_ : SecondOrderVar SecondOrderVarList -> SecondOrderVarList [ctor assoc] .
+  op `[_`] : SecondOrderVarList -> SecondOrderVarList [ctor] .
+
+  --- Metarule: 3 thanh phan
+  --- metarule(SecondOrderVarList, MetaLiteral, MetaBody)
+  ---
+  --- identity: metarule([P|Q],   [P:A,B], [Q:A,B])
+  --- chain:    metarule([P|Q|R], [P:A,B], [Q:A,C] [R:C,B])
+  --- curry:    metarule([P|Q|F], [P:A,B], [Q:A,B,F])
+  sort Metarule .
+  op metarule : SecondOrderVarList MetaLiteral MetaBody -> Metarule [ctor] .
+
+endfm
+
+--- View de dung LIST{Metarule} cho MetaruleList
+view Metarule from TRIV to METARULE-BASE is
+  sort Elt to Metarule .
+endv
+
+fmod METARULE is
+  protecting METARULE-BASE .
+
+  --- MetaruleList: danh sach metarules
+  --- Dung built-in LIST voi dau cach lam separator
+  --- Vi du:
+  ---   metarule([P|Q], [P:A,B], [Q:A,B])
+  ---   metarule([P|Q|R], [P:A,B], [Q:A,C] [R:C,B])
+  protecting LIST{Metarule} * (
+    sort NeList{Metarule} to NeMetaruleList,
+    sort List{Metarule}   to MetaruleList,
+    op nil                to nilMR
+  ) .
+
+  op METARULES : -> MetaruleList .
+
+endfm

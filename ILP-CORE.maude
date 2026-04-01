@@ -1,36 +1,39 @@
-load METARULE-SURFACE2.maude
+--- ============================================================
+--- ILP-CORE.maude
+--- Khai bao co so cho moi bai toan ILP
+--- ============================================================
 
-fmod ILP-CORE is
-  protecting METARULE-SURFACE2 .
-
+--- PHAN 1: Sort co ban
+fmod PRED is
   sort Entity .
   sort Pred .
+endfm
 
-  sort Arity .
-  ops unary binary ternary : -> Arity [ctor] .
+--- PHAN 2: View de dung LIST{Pred}
+view Pred from TRIV to PRED is
+  sort Elt to Pred .
+endv
 
-  sort PredDecl PredDeclList .
-  subsort PredDecl < PredDeclList .
+--- PHAN 3: PredList dung built-in LIST
+fmod PRED-LIST is
+  protecting LIST{Pred} * (
+    sort NeList{Pred} to NePredList,
+    sort List{Pred}   to PredList,
+    op nil            to nilPL
+  ) .
+endfm
 
-  op predDecl    : Pred Arity -> PredDecl [ctor] .
-  op nilPredDecl : -> PredDeclList [ctor] .
-  op _;_         : PredDeclList PredDeclList -> PredDeclList [assoc id: nilPredDecl ctor] .
+--- PHAN 4: Interface chung cho moi bai toan ILP
+fmod ILP-CORE is
+  protecting PRED-LIST .
 
-  op PREDS : -> PredDeclList .
+  --- BK: Background Knowledge - tap cac facts da biet
+  op BK  : -> PredList .
 
-  sort Atom AtomList .
-  subsort Atom < AtomList .
+  --- POS: Positive examples - cac vi du duong can hoc duoc
+  op POS : -> PredList .
 
-  op nilAtom : -> AtomList [ctor] .
-  op _;_     : AtomList AtomList -> AtomList [assoc id: nilAtom ctor] .
-
-  op atom1 : Pred Entity -> Atom [ctor] .
-  op atom2 : Pred Entity Entity -> Atom [ctor] .
-  op atom3 : Pred Entity Entity Entity -> Atom [ctor] .
-
-  op BK        : -> AtomList .
-  op POS       : -> AtomList .
-  op NEG       : -> AtomList .
-  op METARULES : -> MetaruleList .
+  --- NEG: Negative examples - cac vi du am khong duoc cover
+  op NEG : -> PredList .
 
 endfm

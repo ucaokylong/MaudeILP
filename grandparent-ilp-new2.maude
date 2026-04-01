@@ -1,57 +1,44 @@
-load ILP-CORE.maude
+load METARULE.maude
 
 fmod GRANDPARENT-ILP-NEW2 is
-  protecting ILP-CORE .
+  protecting METARULE .
 
-  --- ============================================================
-  --- Grandparent ILP instance
-  --- This module only supplies problem-specific data.
-  --- ============================================================
-
-  --- Persons / entities
   sort Person .
   subsort Person < Entity .
+  subsort Person < FirstOrderVar .
 
   ops ann amy andy bob steve linda gavin amelia spongebob : -> Person [ctor] .
 
-  --- Predicate symbols as data
-  ops mother father grandparent : -> Pred [ctor] .
+  ops mother father grandparent : Person Person -> Pred [ctor] .
 
-  --- Optional predicate declarations
-  eq PREDS =
-    predDecl(mother, binary) ;
-    predDecl(father, binary) ;
-    predDecl(grandparent, binary) .
-
-  --- Object-level atom constructors for this problem
-  ops mother father grandparent : Entity Entity -> Atom [ctor] .
-
-  --- Background knowledge
   eq BK =
-    mother(ann, amy)        ;
-    mother(ann, andy)       ;
-    mother(amy, amelia)     ;
-    mother(amy, bob)        ;
-    mother(linda, gavin)    ;
-    father(steve, amy)      ;
-    father(steve, andy)     ;
-    father(andy, spongebob) ;
-    father(gavin, amelia)   .
+    mother(ann,   amy)
+    mother(ann,   andy)
+    mother(amy,   amelia)
+    mother(amy,   bob)
+    mother(linda, gavin)
+    father(steve, amy)
+    father(steve, andy)
+    father(andy,  spongebob)
+    father(gavin, amelia) .
 
-  --- Positive examples
   eq POS =
-    grandparent(ann, amelia)      ;
-    grandparent(steve, amelia)    ;
-    grandparent(steve, spongebob) ;
-    grandparent(linda, amelia)    .
+    grandparent(ann,   amelia)
+    grandparent(steve, amelia)
+    grandparent(steve, spongebob)
+    grandparent(linda, amelia) .
 
-  --- Negative examples
   eq NEG =
     grandparent(amy, amelia) .
 
-  --- Metarules
+  var P Q R : Pred .
+  var A B C : Person .
+
+  --- QUAN TRONG: Phai co dau cach xung quanh | va :
+  --- [P | Q]   khong phai [P|Q]
+  --- [P : A,B] khong phai [P:A,B]
   eq METARULES =
-    metarule((p,a,b), (q,a,b)) ;
-    metarule((p,a,b), (q,a,c), (r,c,b)) .
+    metarule([P | Q],     [P : A,B], [Q : A,B])
+    metarule([P | Q | R], [P : A,B], [Q : A,C] [R : C,B]) [nonexec] .
 
 endfm

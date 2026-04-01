@@ -1,36 +1,64 @@
---- ============================================================
---- METARULE-SURFACE2.maude (NEW)
---- Dùng cho GRANDPARENT-ILP-NEW2
---- ============================================================
+load ILP-CORE.maude
 
 fmod METARULE-SURFACE2 is
-  protecting QID .
+  protecting ILP-CORE .
 
-  sort SlotVar .
-  subsort Qid < SlotVar .
+  --- SecondOrderVar: bien bac 2 (predicate-level)
+  --- Pred < SecondOrderVar
+  --- Co the mo rong: ops myFunc : -> SecondOrderVar [ctor] .
+  sort SecondOrderVar .
+  subsort Pred < SecondOrderVar .
 
-  sort PredSlot ArgSlot .
-  subsort PredSlot < SlotVar .
-  subsort ArgSlot  < SlotVar .
+  --- FirstOrderVar: bien bac 1 (argument-level)
+  --- Entity < FirstOrderVar
+  --- Co the mo rong: Func, Cond, Then, Else < FirstOrderVar
+  sort FirstOrderVar .
+  subsort Entity < FirstOrderVar .
 
-  --- Pre-declared slot names
-  ops p q r s t : -> PredSlot [ctor] .
-  ops a b c d e : -> ArgSlot  [ctor] .
+  --- SecondOrderVarList: khai bao cac bien bac 2 cua metarule
+  --- Vi du: [P,Q]  [P,Q,R]  [P,Q,F]
+  sort SecondOrderVarList .
+  op `[_`]         : SecondOrderVar -> SecondOrderVarList [ctor] .
+  op `[_,_`]       : SecondOrderVar SecondOrderVar -> SecondOrderVarList [ctor] .
+  op `[_,_,_`]     : SecondOrderVar SecondOrderVar SecondOrderVar -> SecondOrderVarList [ctor] .
+  op `[_,_,_,_`]   : SecondOrderVar SecondOrderVar SecondOrderVar SecondOrderVar -> SecondOrderVarList [ctor] .
+  op `[_,_,_,_,_`] : SecondOrderVar SecondOrderVar SecondOrderVar SecondOrderVar SecondOrderVar -> SecondOrderVarList [ctor] .
 
-  sort SlotAtom .
-  op `(_`,_`)       : SlotVar SlotVar -> SlotAtom [ctor] .
-  op `(_`,_`,_`)    : SlotVar SlotVar SlotVar -> SlotAtom [ctor] .
-  op `(_`,_`,_`,_`) : SlotVar SlotVar SlotVar SlotVar -> SlotAtom [ctor] .
+---op _:_ : SecondOrderVarList SecondOrderVarList -> SecondOrderVarList [assoc ctor] .
+---op `[_`] : SecondOrderVarList -> SecondOrderVarList [ctor] .
+  --- MetaLiteral: pattern cua mot literal trong metarule
+  --- Vi tri 0 = SecondOrderVar (predicate variable)
+  --- Vi tri 1+ = FirstOrderVar (argument variables)
+  --- Vi du:
+  ---   [P,A,B]              arity 2
+  ---   [Q,A,B,C]            arity 3
+  ---   [Q,A,B,Cond,Func]    arity 4 (curry style)
+  ---   [Q,A,B,Cond,Th,El]  arity 5 (if-then-else style)
+  sort MetaLiteral .
+  op `[_,_,_`]         : SecondOrderVar FirstOrderVar FirstOrderVar -> MetaLiteral [ctor] .
+  op `[_,_,_,_`]       : SecondOrderVar FirstOrderVar FirstOrderVar FirstOrderVar -> MetaLiteral [ctor] .
+  op `[_,_,_,_,_`]     : SecondOrderVar FirstOrderVar FirstOrderVar FirstOrderVar FirstOrderVar -> MetaLiteral [ctor] .
+  op `[_,_,_,_,_,_`]   : SecondOrderVar FirstOrderVar FirstOrderVar FirstOrderVar FirstOrderVar FirstOrderVar -> MetaLiteral [ctor] .
 
+  --- MetaBody: danh sach MetaLiterals cua body
+  --- Vi du: {[Q,A,B]}  {[Q,A,C],[R,C,B]}
+  sort MetaBody .
+  subsort MetaLiteral < MetaBody .
+  op `{_`}   : MetaLiteral -> MetaBody [ctor] .
+  op `{_,_`} : MetaLiteral MetaBody -> MetaBody [ctor] .
+
+  --- Metarule: metarule(SecondOrderVarList, MetaLiteral, MetaBody)
+  --- identity: metarule([P,Q],   [P,A,B], {[Q,A,B]})
+  --- chain:    metarule([P,Q,R], [P,A,B], {[Q,A,C],[R,C,B]})
+  --- curry:    metarule([P,Q,F], [P,A,B], {[Q,A,B,F]})
   sort Metarule MetaruleList .
   subsort Metarule < MetaruleList .
 
   op nilMR : -> MetaruleList [ctor] .
-  op _;_   : MetaruleList MetaruleList -> MetaruleList
-             [assoc id: nilMR ctor] .
+  op _;_   : MetaruleList MetaruleList -> MetaruleList [assoc id: nilMR ctor] .
 
-  op metarule`(_`,_`)       : SlotAtom SlotAtom -> Metarule [ctor] .
-  op metarule`(_`,_`,_`)    : SlotAtom SlotAtom SlotAtom -> Metarule [ctor] .
-  op metarule`(_`,_`,_`,_`) : SlotAtom SlotAtom SlotAtom SlotAtom -> Metarule [ctor] .
+  op metarule : SecondOrderVarList MetaLiteral MetaBody -> Metarule [ctor] .
+
+  op METARULES : -> MetaruleList .
 
 endfm
