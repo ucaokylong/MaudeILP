@@ -1,269 +1,128 @@
-load METARULE.maude
+--- Lưu ý: Đảm bảo file METARULE.maude nằm cùng thư mục
+load METARULE.maude 
 
 fmod ILP-EXTRACT is
   protecting METARULE .
   protecting META-LEVEL .
 
   --- ============================================================
-  --- PHAN 1: TIEN ICH TREN TERMLIST (meta-level)
+  --- 1. TIỆN ÍCH DÀNH CHO TERMLIST (Duyệt đối số Meta-level)
   --- ============================================================
-
   op headTL : TermList -> Term .
   eq headTL((T:Term, TL:TermList)) = T:Term .
   eq headTL(T:Term)                = T:Term [owise] .
 
   op tailTL : TermList -> TermList .
   eq tailTL((T:Term, TL:TermList)) = TL:TermList .
+  eq tailTL(empty)                 = empty .
   eq tailTL(T:Term)                = empty [owise] .
 
   op lengthTL : TermList -> Nat .
   eq lengthTL(empty)                 = 0 .
-  eq lengthTL(T:Term)                = 1 [owise] .
   eq lengthTL((T:Term, TL:TermList)) = s(lengthTL(TL:TermList)) .
+  eq lengthTL(T:Term)                = 1 [owise] .
 
   op nthTL : TermList Nat -> Term .
   eq nthTL((T:Term, TL:TermList), 0)        = T:Term .
   eq nthTL(T:Term,                0)        = T:Term [owise] .
   eq nthTL((T:Term, TL:TermList), s(N:Nat)) = nthTL(TL:TermList, N:Nat) .
 
-  op inTL : Term TermList -> Bool .
-  eq inTL(T:Term, empty)                  = false .
-  eq inTL(T:Term, (T:Term, TL:TermList))  = true .
-  eq inTL(T:Term, (T2:Term, TL:TermList)) = inTL(T:Term, TL:TermList) [owise] .
-
   op appendTL : TermList TermList -> TermList .
-  eq appendTL(empty, TL:TermList)                   = TL:TermList .
-  eq appendTL(T:Term, TL:TermList)                  = (T:Term, TL:TermList) [owise] .
-  eq appendTL((T:Term, TL1:TermList), TL2:TermList) =
-     (T:Term, appendTL(TL1:TermList, TL2:TermList)) .
+  eq appendTL(empty, TL:TermList) = TL:TermList .
+  eq appendTL(TL:TermList, empty) = TL:TermList .
+  eq appendTL((T:Term, TL1:TermList), TL2:TermList) = (T:Term, appendTL(TL1:TermList, TL2:TermList)) .
+  eq appendTL(T:Term, TL:TermList) = (T:Term, TL:TermList) [owise] .
 
   --- ============================================================
-  --- PHAN 2: TRICH XUAT FUNCTOR VA ARGUMENTS
-  --- object-level f(t1,...,tn) --> meta-level 'f[t1,...,tn]
+  --- 2. TRÍCH XUẤT CƠ BẢN (Functor & Arguments)
   --- ============================================================
+  op functorOf : Term -> Qid .
+  eq functorOf(F:Qid[TL:TermList]) = F:Qid .
+  eq functorOf(C:Constant)         = getName(C:Constant) .
 
   op argsOf : Term -> TermList .
   eq argsOf(F:Qid[TL:TermList]) = TL:TermList .
   eq argsOf(C:Constant)         = empty .
 
-  op functorOf : Term -> Qid .
-  eq functorOf(F:Qid[TL:TermList]) = F:Qid .
-  eq functorOf(C:Constant)         = getName(C:Constant) .
-
-  op arityOf : Term -> Nat .
-  eq arityOf(T:Term) = lengthTL(argsOf(T:Term)) .
+  --- Hàm làm phẳng cây dữ liệu (Cực kỳ quan trọng để không sót biến)
+  op flattenGeneric : Qid TermList -> TermList .
+  eq flattenGeneric(Q:Qid, empty) = empty .
+  eq flattenGeneric(Q:Qid, (T:Term, TL:TermList)) = 
+     appendTL(if functorOf(T:Term) == Q:Qid then flattenGeneric(Q:Qid, argsOf(T:Term)) else T:Term fi,
+              flattenGeneric(Q:Qid, TL:TermList)) .
 
   --- ============================================================
-  --- PHAN 3: TRICH XUAT SECONDORDERVARLIST
-  --- [P | Q | R] o object-level
-  --- meta-level: '_|_['_|_[P,Q],R] hoac tuong tu
-  --- Lay danh sach cac SecondOrderVar
+  --- 3. TRÍCH XUẤT METARULE (Head, Body, Predicate Vars)
   --- ============================================================
-
-  --- Tach SecondOrderVarList thanh TermList phang
-  op flattenSOVL : Term -> TermList .
-  eq flattenSOVL(T:Term) =
-     if functorOf(T:Term) == '_|_
-     then appendTL(flattenSOVL(headTL(argsOf(T:Term))),
-                   flattenSOVL(nthTL(argsOf(T:Term), 1)))
-     else T:Term
-     fi .
-
-  --- Lay SecondOrderVarList tu metarule term
-  --- metarule(SOVL, Head, Body) -> argsOf -> [SOVL, Head, Body]
-  op mrSOVL : Term -> Term .
-  eq mrSOVL(MR:Term) = headTL(argsOf(MR:Term)) .
-
-  --- Lay danh sach SecondOrderVars duoi dang TermList phang
+  --- Lấy danh sách biến vị từ (P, Q, R...)
   op mrPredVars : Term -> TermList .
-  eq mrPredVars(MR:Term) =
-     flattenSOVL(headTL(argsOf(mrSOVL(MR:Term)))) .
+  eq mrPredVars(MR:Term) = 
+     flattenGeneric('_|_, argsOf(headTL(argsOf(headTL(argsOf(MR:Term)))))) .
 
-  --- ============================================================
-  --- PHAN 4: TRICH XUAT METALITERAL (HEAD)
-  --- [P : A,B] o object-level
-  --- meta-level: '_:_[P, '_`,_[A,B]] hoac tuong tu
-  --- ============================================================
-
-  --- Lay Head MetaLiteral term tu metarule
   op mrHead : Term -> Term .
   eq mrHead(MR:Term) = nthTL(argsOf(MR:Term), 1) .
 
-  --- Lay SecondOrderVar cua MetaLiteral (truoc dau :)
-  op mlPredVar : Term -> Term .
-  eq mlPredVar(ML:Term) = headTL(argsOf(ML:Term)) .
-
-  --- Lay FirstOrderVarList cua MetaLiteral (sau dau :)
-  op mlArgVars : Term -> Term .
-  eq mlArgVars(ML:Term) = nthTL(argsOf(ML:Term), 1) .
-
-  --- Tach FirstOrderVarList thanh TermList phang
-  op flattenFOVL : Term -> TermList .
-  eq flattenFOVL(T:Term) =
-     if functorOf(T:Term) == '_`,_
-     then appendTL(flattenFOVL(headTL(argsOf(T:Term))),
-                   flattenFOVL(nthTL(argsOf(T:Term), 1)))
-     else T:Term
-     fi .
-
-  --- Lay danh sach FirstOrderVars cua MetaLiteral duoi dang TermList phang
-  op mlArgVarList : Term -> TermList .
-  eq mlArgVarList(ML:Term) = flattenFOVL(mlArgVars(ML:Term)) .
-
-  --- Lay arity cua MetaLiteral (so FirstOrderVars)
-  op mlArity : Term -> Nat .
-  eq mlArity(ML:Term) = lengthTL(mlArgVarList(ML:Term)) .
-
-  --- Lay FirstOrderVar thu N (0-indexed)
-  op mlArgN : Term Nat -> Term .
-  eq mlArgN(ML:Term, N:Nat) = nthTL(mlArgVarList(ML:Term), N:Nat) .
-
-  --- ============================================================
-  --- PHAN 5: TRICH XUAT METABODY
-  --- [Q:A,C] [R:C,B] o object-level (LIST separator = dau cach)
-  --- meta-level: '__[ML1, ML2] hoac tuong tu
-  --- ============================================================
-
-  --- Lay MetaBody term tu metarule
   op mrBody : Term -> Term .
   eq mrBody(MR:Term) = nthTL(argsOf(MR:Term), 2) .
 
-  --- Tach MetaBody thanh TermList cac MetaLiteral phang
-  op flattenBody : Term -> TermList .
-  eq flattenBody(T:Term) =
-     if functorOf(T:Term) == '__
-     then appendTL(flattenBody(headTL(argsOf(T:Term))),
-                   flattenBody(nthTL(argsOf(T:Term), 1)))
-     else T:Term
-     fi .
-
-  --- Lay danh sach MetaLiterals cua body duoi dang TermList
+  --- Tách thân luật thành danh sách các Literal riêng lẻ
   op mrBodyLiterals : Term -> TermList .
-  eq mrBodyLiterals(MR:Term) = flattenBody(mrBody(MR:Term)) .
-
-  --- Lay MetaLiteral thu N cua body (0-indexed)
-  op mrBodyN : Term Nat -> Term .
-  eq mrBodyN(MR:Term, N:Nat) = nthTL(mrBodyLiterals(MR:Term), N:Nat) .
-
-  --- Lay so luong MetaLiterals trong body
-  op mrBodyLen : Term -> Nat .
-  eq mrBodyLen(MR:Term) = lengthTL(mrBodyLiterals(MR:Term)) .
-
-  --- Tong so literals (head + body)
-  op mrSize : Term -> Nat .
-  eq mrSize(MR:Term) = s(mrBodyLen(MR:Term)) .
+  eq mrBodyLiterals(MR:Term) = flattenGeneric('__, argsOf(mrBody(MR:Term))) .
 
   --- ============================================================
-  --- PHAN 6: PHAN TICH SHARING PATTERN
-  --- Nen tang de engine hieu cau truc logic cua metarule
-  --- Doc lap voi ten bien
-  ---
-  --- Dung cho:
-  ---   - Rang buoc khi instantiate
-  ---   - Pruning hypothesis sai cau truc
-  ---   - Admissibility check
-  ---   - Phat hien: identity, chain, recursive
+  --- 4. TRÍCH XUẤT LITERAL & FACT (Đối số và Vị từ)
   --- ============================================================
+  op mlPredVar : Term -> Term .
+  eq mlPredVar(ML:Term) = headTL(argsOf(ML:Term)) .
 
-  op sameVar : Term Term -> Bool .
-  eq sameVar(T:Term, T:Term) = true .
-  eq sameVar(T1:Term, T2:Term) = false [owise] .
+  op mlArgVarList : Term -> TermList .
+  eq mlArgVarList(ML:Term) = flattenGeneric('_`,_, argsOf(nthTL(argsOf(ML:Term), 1))) .
 
-  --- PredVar cua hai MetaLiterals co giong nhau khong
-  --- Dung cho: phat hien recursive metarule
-  op samePredVar : Term Term -> Bool .
-  eq samePredVar(ML1:Term, ML2:Term) =
-     sameVar(mlPredVar(ML1:Term), mlPredVar(ML2:Term)) .
+  op mlArity : Term -> Nat .
+  eq mlArity(ML:Term) = lengthTL(mlArgVarList(ML:Term)) .
 
-  --- ArgVar thu N cua ML1 == ArgVar thu M cua ML2?
-  --- Dung cho: xac dinh rang buoc sharing giua cac literal
-  op sharesArgVar : Term Nat Term Nat -> Bool .
-  eq sharesArgVar(ML1:Term, N:Nat, ML2:Term, M:Nat) =
-     sameVar(mlArgN(ML1:Term, N:Nat), mlArgN(ML2:Term, M:Nat)) .
-
-  --- Head va Body[I] co share ArgVar tai vi tri N, M khong
-  --- Dung cho: phat hien identity/chain tu head
-  op headBodyShares : Term Nat Nat Nat -> Bool .
-  eq headBodyShares(MR:Term, I:Nat, N:Nat, M:Nat) =
-     sharesArgVar(mrHead(MR:Term), N:Nat,
-                  mrBodyN(MR:Term, I:Nat), M:Nat) .
-
-  --- Body[I] va Body[J] co share ArgVar tai vi tri N, M khong
-  --- Dung cho: phat hien chain linking qua bien trung gian
-  op bodyBodyShares : Term Nat Nat Nat Nat -> Bool .
-  eq bodyBodyShares(MR:Term, I:Nat, J:Nat, N:Nat, M:Nat) =
-     sharesArgVar(mrBodyN(MR:Term, I:Nat), N:Nat,
-                  mrBodyN(MR:Term, J:Nat), M:Nat) .
-
-  --- ============================================================
-  --- PHAN 7: TRICH XUAT PRED OBJECT-LEVEL
-  --- mother(ann,amy) o object-level
-  --- meta-level: 'mother['ann.Person,'amy.Person]
-  --- ============================================================
-
-  --- Lay Pred term cua mot fact
+  --- BIẾN ĐỔI QUAN TRỌNG: Gắn hậu tố .Pred để hằng số khớp với biến Predicate
   op factPred : Term -> Term .
-  eq factPred(A:Term) = functorOf(A:Term) .
+  eq factPred(F:Qid[TL:TermList]) = qid(string(F:Qid) + ".Pred") .
+  eq factPred(C:Constant)         = C:Constant .
 
-  --- Lay danh sach Entity arguments cua mot fact
-  op factEntities : Term -> TermList .
-  eq factEntities(A:Term) = argsOf(A:Term) .
-
-  --- Lay arity cua fact
   op factArity : Term -> Nat .
-  eq factArity(A:Term) = lengthTL(factEntities(A:Term)) .
+  eq factArity(A:Term) = lengthTL(argsOf(A:Term)) .
 
-  --- Lay Entity thu N (0-indexed)
-  op factEntityN : Term Nat -> Term .
-  eq factEntityN(A:Term, N:Nat) = nthTL(factEntities(A:Term), N:Nat) .
-
-  --- Kiem tra arity cua MetaLiteral co khop voi fact khong
-  --- Dung cho: pruning som truoc khi match
   op arityMatch : Term Term -> Bool .
-  eq arityMatch(ML:Term, A:Term) =
-     (mlArity(ML:Term) == factArity(A:Term)) .
+  eq arityMatch(ML:Term, A:Term) = (mlArity(ML:Term) == factArity(A:Term)) .
 
   --- ============================================================
-  --- PHAN 8: SUBSTITUTION
-  --- Bind SecondOrderVar/FirstOrderVar -> gia tri cu the
-  --- P -> mother, A -> ann, B -> amy
-  ---
-  --- Dung cho:
-  ---   - Instantiate metarule thanh clause cu the
-  ---   - Consistency check khi matching
-  ---   - Backtracking khi conflict
-  ---   - Predicate invention
+  --- 5. SUBSTITUTION (Bộ gán biến & Lan truyền lỗi)
   --- ============================================================
-
   sort Binding .
   op bind : Term Term -> Binding [ctor] .
-
   sort Subst .
-  op emptySubst : -> Subst [ctor] .
-  op _::_ : Binding Subst -> Subst [ctor assoc id: emptySubst] .
+  subsort Binding < Subst .
+  op nilSubst : -> Subst [ctor] .
+  op failSubst : -> Subst [ctor] .
+  op _::_ : Subst Subst -> Subst [ctor assoc id: nilSubst] .
+
+  --- Nếu gặp failSubst, toàn bộ kết quả phải hỏng (Fail-fast logic)
+  eq failSubst :: S:Subst = failSubst .
+  eq S:Subst :: failSubst = failSubst .
 
   op lookupSubst : Term Subst -> Term .
-  eq lookupSubst(T:Term, emptySubst)                        = T:Term .
+  eq lookupSubst(T:Term, nilSubst) = T:Term .
   eq lookupSubst(T:Term, (bind(T:Term, V:Term) :: S:Subst)) = V:Term .
-  eq lookupSubst(T:Term, (bind(T2:Term,V:Term) :: S:Subst))
-     = lookupSubst(T:Term, S:Subst) [owise] .
+  eq lookupSubst(T:Term, (B:Binding :: S:Subst)) = lookupSubst(T:Term, S:Subst) [owise] .
 
   op isBound : Term Subst -> Bool .
-  eq isBound(T:Term, emptySubst)                        = false .
+  eq isBound(T:Term, nilSubst) = false .
+  eq isBound(T:Term, failSubst) = false .
   eq isBound(T:Term, (bind(T:Term, V:Term) :: S:Subst)) = true .
-  eq isBound(T:Term, (bind(T2:Term,V:Term) :: S:Subst))
-     = isBound(T:Term, S:Subst) [owise] .
+  eq isBound(T:Term, (B:Binding :: S:Subst)) = isBound(T:Term, S:Subst) [owise] .
 
-  --- Them rang buoc:
-  --- Chua bind        -> them vao
-  --- Da bind == V     -> consistent, giu nguyen
-  --- Da bind =/= V    -> conflict -> emptySubst (trigger backtrack)
   op extendSubst : Term Term Subst -> Subst .
-  eq extendSubst(T:Term, V:Term, S:Subst) =
-     if isBound(T:Term, S:Subst)
-     then if lookupSubst(T:Term, S:Subst) == V:Term
-          then S:Subst
-          else emptySubst
-          fi
-     else bind(T:Term, V:Term) :: S:Subst
+  eq extendSubst(T1:Term, T2:Term, failSubst) = failSubst .
+  eq extendSubst(T1:Term, T2:Term, S:Subst) =
+     if isBound(T1:Term, S:Subst)
+     then (if lookupSubst(T1:Term, S:Subst) == T2:Term then S:Subst else failSubst fi)
+     else (bind(T1:Term, T2:Term) :: S:Subst)
      fi .
+endfm

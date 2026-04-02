@@ -1,0 +1,53 @@
+--- 1. Nạp toàn bộ các file liên quan (Đảm bảo tên file đúng với thực tế)
+load ILP-MATCH.maude
+load grandparent-ilp-new2.maude
+
+fmod TEST-EXTRACT is
+  protecting ILP-MATCH .
+  protecting GRANDPARENT-ILP-NEW2 .
+  
+  --- Khai báo biến Meta-level để Maude parse được các chữ cái P, Q, R, A, B...
+  vars P Q R : Pred .
+  vars A B C : Person .
+endfm
+
+--- ============================================================
+--- PHẦN 1: KIỂM TRA TRÍCH XUẤT (EXTRACT)
+--- ============================================================
+
+--- Test 1.1: Trích xuất danh sách biến vị từ (Kỳ vọng: 'P, 'Q, 'R)
+red in TEST-EXTRACT : mrPredVars(upTerm(metarule([P | Q | R], [P : A, B], [Q : A, C] [R : C, B]))) .
+
+--- Test 1.2: Tách phần thân (Body) thành các Literal riêng lẻ (Kỳ vọng: 2 Literal Q và R)
+red in TEST-EXTRACT : mrBodyLiterals(upTerm(metarule([P | Q | R], [P : A, B], [Q : A, C] [R : C, B]))) .
+
+--- Test 1.3: Kiểm tra Arity của một Fact (Kỳ vọng: 2)
+red in TEST-EXTRACT : factArity(upTerm(mother(ann, amy))) .
+
+--- ============================================================
+--- PHẦN 2: KIỂM TRA SO KHỚP (MATCHING)
+--- ============================================================
+
+--- Test 2.1: So khớp 1-1 thành công (Unification)
+--- Khớp [P : A, B] với mother(ann, amy)
+red in TEST-EXTRACT : matchLiteral(
+    upTerm([P : A, B]), 
+    upTerm(mother(ann, amy)), 
+    nilSubst
+) .
+
+--- Test 2.2: So khớp thất bại do Xung đột biến (Conflict)
+--- Giả sử A đã gán là 'bob', nhưng dữ liệu BK lại bảo là 'ann'
+red in TEST-EXTRACT : matchLiteral(
+    upTerm([P : A, B]), 
+    upTerm(mother(ann, amy)), 
+    bind(upTerm(A), upTerm(bob))
+) .
+
+--- Test 2.3: Kiểm tra tính lan truyền lỗi (Fail Propagation)
+--- Nếu Subst đầu vào đã hỏng (failSubst), đầu ra phải hỏng theo
+red in TEST-EXTRACT : matchLiteral(
+    upTerm([P : A, B]), 
+    upTerm(mother(ann, amy)), 
+    failSubst
+) .
