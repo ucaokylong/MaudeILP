@@ -5,7 +5,7 @@ fmod GRANDPARENT-ILP-NEW2 is
 
   sort Person .
   subsort Person < Entity .
-  subsort Person < FirstOrderVar .
+  ---subsort Person < FirstOrderVar .
 
   ops ann amy andy bob steve linda gavin amelia spongebob : -> Person [ctor] .
 

@@ -1,0 +1,25 @@
+load ILP-SEARCH.maude
+load grandparent-ilp-new2.maude
+
+fmod TEST-SEARCH is
+  protecting ILP-SEARCH .
+  protecting GRANDPARENT-ILP-NEW2 .
+  protecting META-LEVEL .
+
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('GRANDPARENT-ILP-NEW2, false) .
+  
+  op POS-Data : -> TermList . eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+  op NEG-Data : -> TermList . eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+  op BK-Data : -> TermList . eq BK-Data = flattenList(getEqRhs(M-PROB, 'BK)) .
+
+  --- Chạy thuật toán Metagol (Set Cover)
+  op Induced-Program : -> MetasubList .
+  eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptySub) .
+
+endfm
+
+set trace off .
+
+--- KỲ VỌNG: ['mother, 'mother] ++ ['father, 'mother] ++ ['father, 'father]
+reduce in TEST-SEARCH : Induced-Program .

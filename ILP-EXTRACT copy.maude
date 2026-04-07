@@ -1,0 +1,127 @@
+load METARULE.maude
+
+fmod ILP-EXTRACT is
+  protecting METARULE .
+  protecting META-LEVEL .
+  protecting CONVERSION .
+
+  vars T T1 T2 : Term .
+  vars TL TL1 TL2 : TermList .
+  vars M : Module .
+  vars Q Q1 Q2 : Qid .
+  vars EqS : EquationSet .
+  vars ODS : OpDeclSet .
+  vars TY : Type .
+  vars AS : AttrSet .
+  vars TYL : TypeList .
+
+  --- ---------------------------------------------------------
+  --- 1. ĐỊNH NGHĨA SET RIÊNG (Tránh Warning QidSet)
+  --- ---------------------------------------------------------
+  sort ILP-QidSet .
+  subsort Qid < ILP-QidSet .
+  op emptySet : -> ILP-QidSet [ctor] .
+  op _|_ : ILP-QidSet ILP-QidSet -> ILP-QidSet [ctor assoc comm id: emptySet] .
+  eq Q | Q = Q .
+
+  op setToList : ILP-QidSet -> TermList .
+  eq setToList(emptySet) = empty .
+  eq setToList(Q | QS:ILP-QidSet) = Q, setToList(QS:ILP-QidSet) .
+
+  --- ---------------------------------------------------------
+  --- 2. TIỆN ÍCH XỬ LÝ CHUỖI & SORT
+  --- ---------------------------------------------------------
+  op beforeDot : String -> String .
+  eq beforeDot(S:String) = if find(S:String, ".", 0) == notFound then S:String 
+                           else substr(S:String, 0, find(S:String, ".", 0)) fi .
+
+  op getName : Term -> Qid .
+  eq getName(C:Constant) = qid(beforeDot(string(C:Constant))) .
+  eq getName(T) = 'nil [owise] .
+
+  --- ---------------------------------------------------------
+  --- 3. TRÍCH XUẤT SIGNATURE (Lấy Predicates & Entities)
+  --- ---------------------------------------------------------
+  op getOpsByResult : Module Qid -> ILP-QidSet .
+  eq getOpsByResult(M, Q) = $getOpsByResult(getOps(M), Q) .
+
+  op $getOpsByResult : OpDeclSet Qid -> ILP-QidSet .
+  eq $getOpsByResult(none, Q2) = emptySet .
+  eq $getOpsByResult((op Q1 : TYL -> TY [AS] .) ODS, Q2) =
+     if (TY == Q2) or (qid(beforeDot(string(TY))) == Q2)
+     then Q1 | $getOpsByResult(ODS, Q2)
+     else $getOpsByResult(ODS, Q2) fi .
+
+  --- Lấy các thực thể (Ann, Bob...) từ các dòng op ... : nil -> Person
+  op getEntities : Module -> TermList .
+  eq getEntities(M) = setToList(getOpsByResult(M, 'Person)) .
+
+  --- ---------------------------------------------------------
+  --- 4. TRÍCH XUẤT DỮ LIỆU TỪ EQUATIONS
+  --- ---------------------------------------------------------
+  op getEqRhs : Module Qid -> Term .
+  eq getEqRhs(M, Q) = $getEqRhs(getEqs(M), Q) .
+
+  op $getEqRhs : EquationSet Qid -> Term .
+  eq $getEqRhs((eq T1 = T2 [AS] .) EqS, Q) = 
+     if (T1 == Q) or (getName(T1) == Q) then T2 else $getEqRhs(EqS, Q) fi .
+  eq $getEqRhs(none, Q) = empty .
+
+  --- ---------------------------------------------------------
+  --- 5. PHẲNG HÓA & PHÂN LOẠI PREDICATES
+  --- ---------------------------------------------------------
+  op flattenList : Term -> TermList .
+  eq flattenList(empty) = empty .
+  eq flattenList(T) = $flatten(T, empty) .
+  op $flatten : Term TermList -> TermList .
+  eq $flatten(F:Qid[TL], Acc:TermList) = 
+     if F:Qid == '__ or F:Qid == '_`,_ or F:Qid == 'nil then $flattenTL(TL, Acc:TermList) 
+     else (F:Qid[TL], Acc:TermList) fi .
+  eq $flatten(T, Acc:TermList) = (T, Acc:TermList) [owise] .
+  op $flattenTL : TermList TermList -> TermList .
+  eq $flattenTL(empty, Acc:TermList) = Acc:TermList .
+  eq $flattenTL((T, TL), Acc:TermList) = $flatten(T, $flattenTL(TL, Acc:TermList)) .
+
+  op getFunctor : Term -> Qid .
+  eq getFunctor(Q:Qid[TL]) = Q:Qid .
+  eq getFunctor(Q:Qid) = Q:Qid [owise] .
+
+  op getPredsInData : TermList -> ILP-QidSet .
+  eq getPredsInData(empty) = emptySet .
+  eq getPredsInData((T, TL)) = getFunctor(T) | getPredsInData(TL) .
+  eq getPredsInData(T) = getFunctor(T) [owise] .
+
+  op filterPreds : ILP-QidSet ILP-QidSet -> TermList .
+  eq filterPreds(emptySet, QS2:ILP-QidSet) = empty .
+  eq filterPreds(Q | QS1:ILP-QidSet, QS2:ILP-QidSet) = 
+     if isMember(Q, QS2:ILP-QidSet) then Q, filterPreds(QS1:ILP-QidSet, QS2:ILP-QidSet)
+     else filterPreds(QS1:ILP-QidSet, QS2:ILP-QidSet) fi .
+
+  op isMember : Qid ILP-QidSet -> Bool .
+  eq isMember(Q, Q | QS:ILP-QidSet) = true .
+  eq isMember(Q1, QS:ILP-QidSet) = false [owise] .
+
+  --- ---------------------------------------------------------
+  --- 6. API PUBLIC
+  --- ---------------------------------------------------------
+  op getTargetPreds : Module -> TermList .
+  eq getTargetPreds(M) = filterPreds(getOpsByResult(M, 'Pred), 
+     (getPredsInData(flattenList(getEqRhs(M, 'POS))) | 
+      getPredsInData(flattenList(getEqRhs(M, 'NEG))))) .
+
+  op getBKPreds : Module -> TermList .
+  eq getBKPreds(M) = filterPreds(getOpsByResult(M, 'Pred), 
+     getPredsInData(flattenList(getEqRhs(M, 'BK)))) .
+
+  op getMetarules : Module -> TermList .
+  eq getMetarules(M) = flattenList(getEqRhs(M, 'METARULES)) .
+
+  --- ---------------------------------------------------------
+  --- 7. SUBSTITUTION
+  --- ---------------------------------------------------------
+  sort Binding Subst . subsort Binding < Subst .
+  op bind : Term Term -> Binding [ctor] .
+  op nilSubst : -> Subst [ctor] . op failSubst : -> Subst [ctor] .
+  op _::_ : Subst Subst -> Subst [ctor assoc id: nilSubst] .
+  eq failSubst :: S:Subst = failSubst . eq S:Subst :: failSubst = failSubst .
+endfm

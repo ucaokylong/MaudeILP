@@ -1,0 +1,104 @@
+load ILP-CORE-ENGINE.maude
+
+fmod ILP-SEARCH is
+  protecting ILP-CORE-ENGINE .
+
+  vars P A B : Term . vars POS NEG BK FullBK : TermList .
+  vars Prog Candidates MSL : MetasubList .
+  vars Q R F : Qid . vars Fact : Term .
+
+  --- ---------------------------------------------------------
+  --- 1. BỘ CÔNG CỤ CHỨNG MINH CƠ SỞ (Không cần Meta-level)
+  --- Dùng các hàm getF, getArg1, getArg2 từ Core Engine để đối chiếu
+  --- ---------------------------------------------------------
+  
+  --- Kiểm tra 1 fact đơn lẻ Q(A,B) có trong BK không
+  op checkFactGiven : Qid Term Term TermList -> Bool .
+  eq checkFactGiven(F, A, B, empty) = false .
+  eq checkFactGiven(F, A, B, (Fact, BK)) = 
+     if (getF(Fact) == F) and (getArg1(Fact) == A) and (getArg2(Fact) == B)
+     then true else checkFactGiven(F, A, B, BK) fi .
+
+  --- Kiểm tra 1 chuỗi Q(A,C) và R(C,B) có tồn tại trong BK không
+  op checkChainGiven : Qid Qid Term Term TermList TermList -> Bool .
+  eq checkChainGiven(Q, R, A, B, empty, FullBK) = false .
+  eq checkChainGiven(Q, R, A, B, (Fact, BK), FullBK) =
+     if (getF(Fact) == Q) and (getArg1(Fact) == A)
+     then (if checkFactGiven(R, getArg2(Fact), B, FullBK) 
+           then true 
+           else checkChainGiven(Q, R, A, B, BK, FullBK) fi)
+     else checkChainGiven(Q, R, A, B, BK, FullBK) fi .
+
+  --- ---------------------------------------------------------
+  --- 2. THẨM ĐỊNH LUẬT VỚI NEG (Early Pruning)
+  --- ---------------------------------------------------------
+  op violatesNEG : MetasubList TermList TermList -> Bool .
+  eq violatesNEG(MSL, empty, BK) = false .
+  eq violatesNEG([Q, R], (P, NEG), BK) =
+     if checkChainGiven(Q, R, getArg1(P), getArg2(P), BK, BK)
+     then true else violatesNEG([Q, R], NEG, BK) fi .
+  eq violatesNEG(Q, (P, NEG), BK) =
+     if checkFactGiven(Q, getArg1(P), getArg2(P), BK)
+     then true else violatesNEG(Q, NEG, BK) fi .
+
+  --- Lọc bỏ các luật ứng viên dính NEG
+  op filterCandidates : MetasubList TermList TermList -> MetasubList .
+  eq filterCandidates(emptySub, NEG, BK) = emptySub .
+  eq filterCandidates([Q, R] ++ MSL, NEG, BK) =
+     if violatesNEG([Q, R], NEG, BK)
+     then filterCandidates(MSL, NEG, BK)
+     else [Q, R] ++ filterCandidates(MSL, NEG, BK) fi .
+  eq filterCandidates(Q ++ MSL, NEG, BK) =
+     if violatesNEG(Q, NEG, BK)
+     then filterCandidates(MSL, NEG, BK)
+     else Q ++ filterCandidates(MSL, NEG, BK) fi .
+
+  --- ---------------------------------------------------------
+  --- 3. KIỂM TRA ĐỘ PHỦ CỦA LUẬT CŨ (Already induced clauses)
+  --- ---------------------------------------------------------
+  op isCovered : Term MetasubList TermList -> Bool .
+  eq isCovered(P, emptySub, BK) = false .
+  eq isCovered(P, [Q, R] ++ Prog, BK) =
+     if checkChainGiven(Q, R, getArg1(P), getArg2(P), BK, BK)
+     then true else isCovered(P, Prog, BK) fi .
+  eq isCovered(P, Q ++ Prog, BK) =
+     if checkFactGiven(Q, getArg1(P), getArg2(P), BK)
+     then true else isCovered(P, Prog, BK) fi .
+
+  --- ---------------------------------------------------------
+  --- 4. VÒNG LẶP HỌC (Sequential Covering Algorithm)
+  --- ---------------------------------------------------------
+  op learn : TermList TermList TermList MetasubList -> MetasubList .
+  
+  --- Base case: Hết POS -> Thành công, trả về Chương trình
+  eq learn(empty, NEG, BK, Prog) = Prog .
+
+  --- Recursive case: Xử lý từng POS
+  eq learn((P, POS), NEG, BK, Prog) =
+     if isCovered(P, Prog, BK)
+     then learn(POS, NEG, BK, Prog) --- Được luật cũ bao phủ -> Đi tiếp
+     else 
+        $induceNewRule(P, POS, NEG, BK, Prog, 
+           --- Gọi CORE-ENGINE sinh luật và lọc NEG ngay lập tức
+           filterCandidates(
+              proveChain(getArg1(P), getArg2(P), BK) ++ 
+              proveIdent(getArg1(P), getArg2(P), BK), 
+           NEG, BK))
+     fi .
+
+  --- Hàm phụ trợ để xử lý kết quả đúc luật
+  op $induceNewRule : Term TermList TermList TermList MetasubList MetasubList -> MetasubList .
+  
+  --- NƠI ĐÂY CHỜ SẴN PREDICATE INVENTION: Nếu rỗng nghĩa là BK vô dụng!
+  eq $induceNewRule(P, POS, NEG, BK, Prog, emptySub) = emptySub . 
+  
+  --- Nếu có ứng viên ngon lành: Nhặt cái đầu tiên, bỏ vào rổ Prog, đi tiếp POS sau
+  eq $induceNewRule(P, POS, NEG, BK, Prog, Candidates:MetasubList) =
+     learn(POS, NEG, BK, Prog ++ getFirst(Candidates:MetasubList)) [owise] .
+
+  op getFirst : MetasubList -> MetasubList .
+  eq getFirst([Q, R] ++ MSL) = [Q, R] .
+  eq getFirst(Q ++ MSL) = Q .
+  eq getFirst(emptySub) = emptySub .
+
+endfm

@@ -1,0 +1,68 @@
+load ILP-EXTRACT.maude
+load grandparent-ilp-new2.maude
+
+fmod TEST-ILP-EXTRACT-PRO is
+  protecting ILP-EXTRACT .
+  protecting GRANDPARENT-ILP-NEW2 .
+  protecting META-LEVEL .
+
+  --- Lấy Module bài toán lên cấp độ Meta
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('GRANDPARENT-ILP-NEW2, false) .
+
+  --- ---------------------------------------------------------
+  --- NHÓM 1: KIỂM TRA THỰC THỂ (ENTITIES)
+  --- ---------------------------------------------------------
+  --- Mong đợi: 'ann.Person, 'bob.Person... (Dạng Constant)
+  op test-entities : -> TermList .
+  eq test-entities = getEntities(M-PROB) .
+
+  --- ---------------------------------------------------------
+  --- NHÓM 2: KIỂM TRA PHÂN LOẠI VỊ TỰ (PREDICATES)
+  --- ---------------------------------------------------------
+  --- 2.1. Vị tự mục tiêu (Dạng Constant)
+  op test-target-only : -> TermList .
+  eq test-target-only = getTargetPreds(M-PROB) .
+
+  --- 2.2. Vị tự nền tảng BK (Dạng Constant)
+  op test-bk-only : -> TermList .
+  eq test-bk-only = getBKPreds(M-PROB) .
+
+  --- 2.3. Toàn bộ vị tự có sẵn (Cho phép học đệ quy)
+  op test-all-available : -> TermList .
+  eq test-all-available = getAllAvailablePreds(M-PROB) .
+
+  --- ---------------------------------------------------------
+  --- NHÓM 3: KIỂM TRA LỌC THÔNG MINH (ARITY)
+  --- ---------------------------------------------------------
+  --- Lấy các vị từ Arity 2 từ kho BK
+  op test-bk-arity-2 : -> TermList .
+  eq test-bk-arity-2 = getPredsByArity(M-PROB, 2) .
+
+  --- ---------------------------------------------------------
+  --- NHÓM 4: SOI CHI TIẾT METARULE
+  --- ---------------------------------------------------------
+  --- Lấy danh sách khung luật (Dạng TermList)
+  op test-metarules : -> TermList .
+  eq test-metarules = getMetarules(M-PROB) .
+
+endfm
+
+--- ---------------------------------------------------------
+--- LỆNH THỰC THI (Copy-paste vào Maude)
+--- ---------------------------------------------------------
+set trace off .
+
+--- Kiểm tra thực thể (Phải có đuôi .Person hoặc .Entity)
+reduce in TEST-ILP-EXTRACT-PRO : test-entities .
+
+--- Kiểm tra phân loại vị tự (Phải có đuôi .Pred)
+reduce in TEST-ILP-EXTRACT-PRO : test-target-only .
+reduce in TEST-ILP-EXTRACT-PRO : test-bk-only .
+reduce in TEST-ILP-EXTRACT-PRO : test-all-available .
+
+--- Kiểm tra bộ lọc Arity
+reduce in TEST-ILP-EXTRACT-PRO : test-bk-arity-2 .
+
+--- Kiểm tra Metarules
+reduce in TEST-ILP-EXTRACT-PRO : test-metarules .

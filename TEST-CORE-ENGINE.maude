@@ -1,0 +1,28 @@
+load ILP-CORE-ENGINE.maude
+load grandparent-ilp-new2.maude
+
+fmod TEST-ENGINE is
+  protecting ILP-CORE-ENGINE .
+  protecting GRANDPARENT-ILP-NEW2 .
+  protecting META-LEVEL .
+
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('GRANDPARENT-ILP-NEW2, false) .
+  
+  op BK : -> TermList .
+  eq BK = flattenList(getEqRhs(M-PROB, 'BK)) .
+
+  op test-ann-chain : -> MetasubList .
+  eq test-ann-chain = proveChain('ann.Person, 'amelia.Person, BK) .
+
+  op test-steve-chain : -> MetasubList .
+  eq test-steve-chain = proveChain('steve.Person, 'amelia.Person, BK) .
+
+  op test-steve-ident : -> MetasubList .
+  eq test-steve-ident = proveIdent('steve.Person, 'amelia.Person, BK) .
+endfm
+
+set trace off .
+reduce in TEST-ENGINE : test-ann-chain .
+reduce in TEST-ENGINE : test-steve-chain .
+reduce in TEST-ENGINE : test-steve-ident .

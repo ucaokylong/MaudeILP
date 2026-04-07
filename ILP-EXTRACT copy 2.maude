@@ -1,0 +1,177 @@
+load METARULE.maude
+
+fmod ILP-EXTRACT is
+  protecting METARULE .
+  protecting META-LEVEL .
+  protecting CONVERSION .
+
+  vars T T1 T2 : Term .
+  vars TL TL1 TL2 : TermList .
+  vars M : [Module] . 
+  vars Q Q1 Q2 : Qid .
+  vars EqS : EquationSet .
+  vars ODS : OpDeclSet .
+  vars TY : Type .
+  vars AS : AttrSet .
+  vars TYL : TypeList .
+  vars N : Nat .
+  vars S : String .
+
+  --- ---------------------------------------------------------
+  --- 1. TẬP HỢP QID (Lọc trùng & Ổn định nhất ở Meta-level)
+  --- ---------------------------------------------------------
+  sort ILP-QidSet .
+  subsort Qid < ILP-QidSet .
+  op emptySet : -> ILP-QidSet [ctor] .
+  op _|_ : ILP-QidSet ILP-QidSet -> ILP-QidSet [ctor assoc comm id: emptySet] .
+  eq Q | Q = Q .
+
+  op setToList : ILP-QidSet -> TermList .
+  eq setToList(emptySet) = empty .
+  eq setToList(Q | QS:ILP-QidSet) = Q, setToList(QS:ILP-QidSet) .
+
+  --- ---------------------------------------------------------
+  --- 2. TIỆN ÍCH
+  --- ---------------------------------------------------------
+  op beforeDot : String -> String .
+  eq beforeDot(S) = if find(S, ".", 0) == notFound then S 
+                    else substr(S, 0, find(S, ".", 0)) fi .
+
+  op getName : Term -> Qid .
+  eq getName(C:Constant) = qid(beforeDot(string(C:Constant))) .
+  eq getName(T) = 'nil [owise] .
+
+  op getFunctor : Term -> Qid .
+  eq getFunctor(Q:Qid[TL]) = Q:Qid .
+  eq getFunctor(Q:Qid) = Q:Qid [owise] .
+
+  --- ---------------------------------------------------------
+  --- 3. TRÍCH XUẤT ARITY & ENTITIES
+  --- ---------------------------------------------------------
+  op countArity : TypeList -> Nat .
+  eq countArity(nil) = 0 .
+  eq countArity(TY TYL) = 1 + countArity(TYL) .
+
+  op getArity : [Module] Qid -> Nat .
+  eq getArity(M, Q) = $getArity(getOps(M), Q) .
+
+  op $getArity : OpDeclSet Qid -> Nat .
+  eq $getArity((op Q1 : TYL -> TY [AS] .) ODS, Q2) =
+     if (Q1 == Q2) or (qid(beforeDot(string(Q1))) == Q2)
+     then countArity(TYL) else $getArity(ODS, Q2) fi .
+  eq $getArity(none, Q2) = 0 .
+
+  op getEntities : [Module] -> TermList .
+  eq getEntities(M) = setToList($extractEntities(getOps(M))) .
+
+  op $extractEntities : OpDeclSet -> ILP-QidSet .
+  eq $extractEntities(none) = emptySet .
+  eq $extractEntities((op Q1 : TYL -> TY [AS] .) ODS) =
+     if (TYL == nil) and (qid(beforeDot(string(TY))) =/= 'Pred)
+     then Q1 | $extractEntities(ODS)
+     else $extractEntities(ODS) fi .
+
+  op getAllPredsSet : [Module] -> ILP-QidSet .
+  eq getAllPredsSet(M) = $getOpsByResult(getOps(M), 'Pred) .
+
+  op $getOpsByResult : OpDeclSet Qid -> ILP-QidSet .
+  eq $getOpsByResult(none, Q2) = emptySet .
+  eq $getOpsByResult((op Q1 : TYL -> TY [AS] .) ODS, Q2) =
+     if (qid(beforeDot(string(TY))) == Q2)
+     then Q1 | $getOpsByResult(ODS, Q2)
+     else $getOpsByResult(ODS, Q2) fi .
+
+  --- ---------------------------------------------------------
+  --- 4. BỘ LỌC DỰA TRÊN SET (Ổn định 100%)
+  --- ---------------------------------------------------------
+  
+  --- Lọc Set theo Arity (Hàm này sẽ thay thế filterByArity cũ)
+  op filterSetByArity : ILP-QidSet [Module] Nat -> ILP-QidSet .
+  eq filterSetByArity(emptySet, M, N) = emptySet .
+  eq filterSetByArity(Q | QS:ILP-QidSet, M, N) = 
+     if getArity(M, Q) == N 
+     then Q | filterSetByArity(QS:ILP-QidSet, M, N)
+     else filterSetByArity(QS:ILP-QidSet, M, N) fi .
+
+  --- [API] Lấy vị từ theo Arity (Chuyển sang List ở bước cuối)
+  op getPredsByArity : [Module] Nat -> TermList .
+  eq getPredsByArity(M, N) = setToList(filterSetByArity(getAllPredsSet(M), M, N)) .
+
+  op filterSetByPresence : ILP-QidSet ILP-QidSet -> ILP-QidSet .
+  eq filterSetByPresence(emptySet, QS2:ILP-QidSet) = emptySet .
+  eq filterSetByPresence(Q | QS1:ILP-QidSet, QS2:ILP-QidSet) = 
+     if isMember(Q, QS2:ILP-QidSet) 
+     then Q | filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet)
+     else filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) fi .
+
+  op isMember : Qid ILP-QidSet -> Bool .
+  eq isMember(Q, Q | QS:ILP-QidSet) = true .
+  eq isMember(Q1, QS:ILP-QidSet) = false [owise] .
+
+  --- ---------------------------------------------------------
+  --- 5. API PREDICATES (Target, BK, Available)
+  --- ---------------------------------------------------------
+  op getPredsInData : TermList -> ILP-QidSet .
+  eq getPredsInData(empty) = emptySet .
+  eq getPredsInData((T, TL)) = getFunctor(T) | getPredsInData(TL) .
+  eq getPredsInData(T) = getFunctor(T) [owise] .
+
+  op getTargetPreds : [Module] -> TermList .
+  eq getTargetPreds(M) = setToList(filterSetByPresence(getAllPredsSet(M), 
+     (getPredsInData(flattenList(getEqRhs(M, 'POS))) | getPredsInData(flattenList(getEqRhs(M, 'NEG)))))) .
+
+  op getBKPreds : [Module] -> TermList .
+  eq getBKPreds(M) = setToList(filterSetByPresence(getAllPredsSet(M), 
+     getPredsInData(flattenList(getEqRhs(M, 'BK))))) .
+
+  op getAllAvailablePreds : [Module] -> TermList .
+  eq getAllAvailablePreds(M) = setToList(getAllPredsSet(M)) .
+
+  --- ---------------------------------------------------------
+  --- 6. SOI METARULE (Giữ nguyên vì đã chạy tốt)
+  --- ---------------------------------------------------------
+  op getLiteralArity : Term -> Nat .
+  eq getLiteralArity(Q:Qid[TL]) = lengthTermList(TL) .
+  eq getLiteralArity(T) = 0 [owise] .
+
+  op lengthTermList : TermList -> Nat .
+  eq lengthTermList(empty) = 0 .
+  eq lengthTermList((T, TL)) = 1 + lengthTermList(TL) .
+
+  op getPredVar : Term -> Qid .
+  eq getPredVar(Q:Qid[TL]) = Q:Qid .
+  eq getPredVar(T) = 'nil [owise] .
+
+  --- ---------------------------------------------------------
+  --- 7. EQUATIONS & METARULES
+  --- ---------------------------------------------------------
+  op getEqRhs : [Module] Qid -> Term .
+  eq getEqRhs(M, Q) = $getEqRhs(getEqs(M), Q) .
+
+  op $getEqRhs : EquationSet Qid -> Term .
+  eq $getEqRhs((eq T1 = T2 [AS] .) EqS, Q) = 
+     if (T1 == Q) or (getName(T1) == Q) then T2 else $getEqRhs(EqS, Q) fi .
+  eq $getEqRhs(none, Q) = empty .
+
+  op flattenList : Term -> TermList .
+  eq flattenList(empty) = empty .
+  eq flattenList(T) = $flatten(T, empty) .
+  op $flatten : Term TermList -> TermList .
+  eq $flatten(F:Qid[TL], Acc:TermList) = 
+     if F:Qid == '__ or F:Qid == '_`,_ or F:Qid == 'nil then $flattenTL(TL, Acc:TermList) 
+     else (F:Qid[TL], Acc:TermList) fi .
+  eq $flatten(T, Acc:TermList) = (T, Acc:TermList) [owise] .
+  op $flattenTL : TermList TermList -> TermList .
+  eq $flattenTL(empty, Acc:TermList) = Acc:TermList .
+  eq $flattenTL((T, TL), Acc:TermList) = $flatten(T, $flattenTL(TL, Acc:TermList)) .
+
+  op getMetarules : [Module] -> TermList .
+  eq getMetarules(M) = flattenList(getEqRhs(M, 'METARULES)) .
+
+  sort Binding Subst . subsort Binding < Subst .
+  op bind : Term Term -> Binding [ctor] .
+  op nilSubst : -> Subst [ctor] . op failSubst : -> Subst [ctor] .
+  op _::_ : Subst Subst -> Subst [ctor assoc id: nilSubst] .
+  vars S-Subst : Subst .
+  eq failSubst :: S-Subst = failSubst . eq S-Subst :: failSubst = failSubst .
+endfm

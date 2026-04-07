@@ -1,0 +1,77 @@
+load ILP-EXTRACT.maude
+
+fmod ILP-CORE-ENGINE is
+  protecting ILP-EXTRACT .
+
+  vars A B C : Term . vars F Q R : Qid . vars Fact T : Term . 
+  vars TL BK : TermList . vars N : Nat .
+
+  --- 1. CÔNG CỤ CƠ BẢN
+  op nth : TermList Nat -> Term .
+  eq nth((T, TL), 0) = T .
+  eq nth((T, TL), s(N)) = nth(TL, N) .
+  eq nth(T, 0) = T [owise] .
+
+  --- 2. BÓC TÁCH SỰ KIỆN TỪ BK (Fix lỗi multiple parses)
+  op getF : Term -> Qid .
+  eq getF(F:Qid[TL]) = F:Qid .
+  eq getF(T) = 'nil [owise] .
+
+  op getArg1 : Term -> Term .
+  eq getArg1(F:Qid[TL]) = nth(TL, 0) .
+  eq getArg1(T) = 'nil [owise] .
+
+  op getArg2 : Term -> Term .
+  eq getArg2(F:Qid[TL]) = nth(TL, 1) .
+  eq getArg2(T) = 'nil [owise] .
+
+  --- 3. CẤU TRÚC LƯU METASUB (Fix lỗi trùng lặp _|_)
+  sort QidPair .
+  op [_,_] : Qid Qid -> QidPair [ctor] . 
+  
+  sort MetasubList .
+  subsort QidPair Qid < MetasubList . 
+  op emptySub : -> MetasubList [ctor] .
+  --- Dùng _++_ thay vì _|_ để tránh đụng hàng với ILP-EXTRACT
+  op _++_ : MetasubList MetasubList -> MetasubList [ctor assoc comm id: emptySub] .
+  eq X:MetasubList ++ X:MetasubList = X:MetasubList .
+
+  --- 4. BƯỚC 1: Tìm Q(A, C)
+  sort QCTerm . op qc : Qid Term -> QCTerm [ctor] . --- Dùng qc thay vì [_,_] để tránh trùng
+  sort QCList . subsort QCTerm < QCList .
+  op emptyQC : -> QCList [ctor] .
+  op _@@_ : QCList QCList -> QCList [ctor assoc id: emptyQC] .
+
+  op findQC : Term TermList -> QCList .
+  eq findQC(A, empty) = emptyQC .
+  eq findQC(A, (Fact, BK)) =
+     if getArg1(Fact) == A 
+     then qc(getF(Fact), getArg2(Fact)) @@ findQC(A, BK)
+     else findQC(A, BK) fi .
+
+  --- 5. BƯỚC 2: Tìm R(C, B)
+  op findR : Term Term TermList -> MetasubList .
+  eq findR(C, B, empty) = emptySub .
+  eq findR(C, B, (Fact, BK)) =
+     if (getArg1(Fact) == C) and (getArg2(Fact) == B) 
+     then getF(Fact) ++ findR(C, B, BK)
+     else findR(C, B, BK) fi .
+
+  --- 6. BƯỚC 3: Chứng minh Chain Rule
+  op proveChain : Term Term TermList -> MetasubList .
+  eq proveChain(A, B, BK) = $exploreQC(findQC(A, BK), B, BK) .
+
+  op $exploreQC : QCList Term TermList -> MetasubList .
+  eq $exploreQC(emptyQC, B, BK) = emptySub .
+  eq $exploreQC(qc(Q, C) @@ QCL:QCList, B, BK) =
+     $combineQR(Q, findR(C, B, BK)) ++ $exploreQC(QCL:QCList, B, BK) .
+
+  op $combineQR : Qid MetasubList -> MetasubList .
+  eq $combineQR(Q, emptySub) = emptySub .
+  eq $combineQR(Q, R ++ RL:MetasubList) = [Q, R] ++ $combineQR(Q, RL:MetasubList) .
+
+  --- 7. Chứng minh Ident Rule
+  op proveIdent : Term Term TermList -> MetasubList .
+  eq proveIdent(A, B, BK) = findR(A, B, BK) .
+
+endfm
