@@ -10,15 +10,11 @@ fmod ILP-EXTRACT is
   vars TY : Type . vars AS : AttrSet . vars TYL : TypeList .
   vars N : Nat . vars S : String .
 
-  --- ---------------------------------------------------------
-  --- 1. TẬP HỢP QID 
-  --- ---------------------------------------------------------
   sort ILP-QidSet . subsort Qid < ILP-QidSet .
   op emptySet : -> ILP-QidSet [ctor] .
   op _|_ : ILP-QidSet ILP-QidSet -> ILP-QidSet [ctor assoc comm id: emptySet] .
   eq Q | Q = Q .
 
-  --- 2. CHUYỂN ĐỔI SET SANG TERMLIST CỦA CONSTANTS (Sửa lỗi kẹt)
   op qidToConst : Qid Type -> Constant .
   eq qidToConst(Q, TY) = qid(string(Q) + "." + string(TY)) .
 
@@ -26,9 +22,6 @@ fmod ILP-EXTRACT is
   eq setToTermList(emptySet, TY) = empty .
   eq setToTermList(Q | QS:ILP-QidSet, TY) = qidToConst(Q, TY), setToTermList(QS:ILP-QidSet, TY) .
 
-  --- ---------------------------------------------------------
-  --- 3. TRÍCH XUẤT (Khai báo đầy đủ để tránh bad token)
-  --- ---------------------------------------------------------
   op beforeDot : String -> String .
   eq beforeDot(S) = if find(S, ".", 0) == notFound then S else substr(S, 0, find(S, ".", 0)) fi .
 
@@ -38,7 +31,8 @@ fmod ILP-EXTRACT is
   eq getName(T) = 'nil [owise] .
 
   op countArity : TypeList -> Nat .
-  eq countArity(nil) = 0 . eq countArity(TY TYL) = 1 + countArity(TYL) .
+  eq countArity(nil) = 0 .
+  eq countArity(TY TYL) = 1 + countArity(TYL) .
 
   op getArity : [Module] Qid -> Nat .
   op $getArity : OpDeclSet Qid -> Nat .
@@ -60,11 +54,9 @@ fmod ILP-EXTRACT is
   op filterSetByPresence : ILP-QidSet ILP-QidSet -> ILP-QidSet .
   eq filterSetByPresence(emptySet, QS2:ILP-QidSet) = emptySet .
   eq filterSetByPresence(Q | QS1:ILP-QidSet, QS2:ILP-QidSet) = if isMember(Q, QS2:ILP-QidSet) then Q | filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) else filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) fi .
-  op isMember : Qid ILP-QidSet -> Bool . eq isMember(Q, Q | QS:ILP-QidSet) = true . eq isMember(Q1, QS:ILP-QidSet) = false [owise] .
+  op isMember : Qid ILP-QidSet -> Bool .
+  eq isMember(Q, Q | QS:ILP-QidSet) = true . eq isMember(Q1, QS:ILP-QidSet) = false [owise] .
 
-  --- ---------------------------------------------------------
-  --- 4. API PUBLIC (Dùng setToTermList để trả về danh sách sạch)
-  --- ---------------------------------------------------------
   op getEntities : [Module] -> TermList .
   op $extractEntities : OpDeclSet -> ILP-QidSet .
   eq getEntities(M) = setToTermList($extractEntities(getOps(M)), 'Entity) .
@@ -80,9 +72,6 @@ fmod ILP-EXTRACT is
   op getPredsByArity : [Module] Nat -> TermList .
   eq getPredsByArity(M, N) = setToTermList(filterSetByArity(getAllPredsSet(M), M, N), 'Pred) .
 
-  --- ---------------------------------------------------------
-  --- 5. EQUATIONS & METARULES (Giữ nguyên)
-  --- ---------------------------------------------------------
   op getFunctor : Term -> Qid .
   eq getFunctor(Q:Qid[TL]) = Q:Qid . eq getFunctor(Q:Qid) = Q:Qid [owise] .
   op getPredsInData : TermList -> ILP-QidSet .
@@ -90,12 +79,20 @@ fmod ILP-EXTRACT is
   op getEqRhs : [Module] Qid -> Term . eq getEqRhs(M, Q) = $getEqRhs(getEqs(M), Q) .
   op $getEqRhs : EquationSet Qid -> Term . eq $getEqRhs((eq T1 = T2 [AS] .) EqS, Q) = if (T1 == Q) or (beforeDot(string(getName(T1))) == string(Q)) then T2 else $getEqRhs(EqS, Q) fi .
   eq $getEqRhs(none, Q) = empty .
-  op flattenList : Term -> TermList . eq flattenList(empty) = empty . eq flattenList(T) = $flatten(T, empty) .
-  op $flatten : Term TermList -> TermList . eq $flatten(F:Qid[TL], Acc:TermList) = if F:Qid == '__ or F:Qid == '_`,_ or F:Qid == 'nil then $flattenTL(TL, Acc:TermList) else (F:Qid[TL], Acc:TermList) fi .
+  op flattenList : Term -> TermList . eq flattenList(empty) = empty .
+  eq flattenList(T) = $flatten(T, empty) .
+  op $flatten : Term TermList -> TermList .
+  eq $flatten(F:Qid[TL], Acc:TermList) = if F:Qid == '__ or F:Qid == '_`,_ or F:Qid == 'nil then $flattenTL(TL, Acc:TermList) else (F:Qid[TL], Acc:TermList) fi .
   eq $flatten(T, Acc:TermList) = (T, Acc:TermList) [owise] .
-  op $flattenTL : TermList TermList -> TermList . eq $flattenTL(empty, Acc:TermList) = Acc:TermList . eq $flattenTL((T, TL), Acc:TermList) = $flatten(T, $flattenTL(TL, Acc:TermList)) .
+  op $flattenTL : TermList TermList -> TermList .
+  eq $flattenTL(empty, Acc:TermList) = Acc:TermList . eq $flattenTL((T, TL), Acc:TermList) = $flatten(T, $flattenTL(TL, Acc:TermList)) .
+  
+  op extractMetarules : Term -> TermList .
+  eq extractMetarules('__[TL:TermList]) = TL:TermList .
+  eq extractMetarules('nilMR.MetaruleList) = empty .
+  eq extractMetarules(T:Term) = T:Term [owise] .
+
   op getMetarules : [Module] -> TermList . eq getMetarules(M) = flattenList(getEqRhs(M, 'METARULES)) .
-  sort Binding Subst . subsort Binding < Subst . op bind : Term Term -> Binding [ctor] .
-  op nilSubst : -> Subst [ctor] . op failSubst : -> Subst [ctor] . op _::_ : Subst Subst -> Subst [ctor assoc id: nilSubst] .
-  eq failSubst :: S-Subst:Subst = failSubst . eq S-Subst:Subst :: failSubst = failSubst .
+  
+  --- Đã xóa bỏ phần code rác về Subst ở dưới cùng gây cảnh báo
 endfm

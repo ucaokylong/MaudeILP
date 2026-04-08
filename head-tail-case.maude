@@ -29,7 +29,6 @@ fmod HEAD-TAIL-CASE is
     f(listILP, valP) .
 
   --- SỬA LẠI: KHÔNG CÓ NEGATIVE EXAMPLES!
-  eq NEG = empty .
 
   --- BIẾN 
   var P Q R : Pred .

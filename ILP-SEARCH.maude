@@ -3,153 +3,116 @@ load ILP-CORE-ENGINE.maude
 fmod ILP-SEARCH is
   protecting ILP-CORE-ENGINE .
 
-  vars P : Term . vars POS NEG BK FullBK : TermList .
-  vars Prog MSL : MetasubList .
-  vars Q R F Head : Qid . vars Fact : Term .
+  vars P A B Fact : Term . vars POS NEG BK FullBK MRs : TermList .
+  vars C : ILPClause . vars CS CS2 : ILPClauseSet .
   vars N Depth MaxDepth : Nat .
-  vars A B C : Term .
+  vars F Q R : Qid . vars Rest : Path .
+  vars Srt VStr : String .
 
-  --- ---------------------------------------------------------
-  --- 1. CÔNG CỤ TÌM ĐƯỜNG CƠ BẢN
-  --- ---------------------------------------------------------
-  op checkFactGiven : Qid Term Term TermList -> Bool .
-  eq checkFactGiven(F, A, B, empty) = false .
-  eq checkFactGiven(F, A, B, (Fact, BK)) = 
-     if (getF(Fact) == F) and (getArg1(Fact) == A) and (getArg2(Fact) == B)
-     then true else checkFactGiven(F, A, B, BK) fi .
+  --- 1. LỌC NEG VÀ BAO PHỦ 
+  op violatesNEG : ILPClause TermList TermList -> Bool .
+  eq violatesNEG(C, empty, BK) = false .
+  eq violatesNEG(C, (P, NEG), BK) =
+     if checkClause(C, P, BK) then true else violatesNEG(C, NEG, BK) fi .
+  eq violatesNEG(C, P, BK) = if checkClause(C, P, BK) then true else false fi .
 
-  op checkChainGiven : Qid Qid Term Term TermList TermList -> Bool .
-  eq checkChainGiven(Q, R, A, B, empty, FullBK) = false .
-  eq checkChainGiven(Q, R, A, B, (Fact, BK), FullBK) =
-     if (getF(Fact) == Q) and (getArg1(Fact) == A)
-     then (if checkFactGiven(R, getArg2(Fact), B, FullBK) 
-           then true else checkChainGiven(Q, R, A, B, BK, FullBK) fi)
-     else checkChainGiven(Q, R, A, B, BK, FullBK) fi .
+  op filterCandidates : ILPClauseSet TermList TermList -> ILPClauseSet .
+  eq filterCandidates(emptyClauseSet, NEG, BK) = emptyClauseSet .
+  eq filterCandidates(C ++ CS, NEG, BK) =
+     if violatesNEG(C, NEG, BK) then filterCandidates(CS, NEG, BK) else C ++ filterCandidates(CS, NEG, BK) fi .
 
-  --- ---------------------------------------------------------
-  --- 2. CẤU TRÚC RULE PROLOG (Đã gỡ format gây lỗi)
-  --- ---------------------------------------------------------
-  sort ILPClause . subsort ILPClause < MetasubList .
-  
-  op _ [A,B] :- _ [A,C] & _ [C,B] : Qid Qid Qid -> ILPClause [ctor] .
-  op _ [A,B] :- _ [A,B] : Qid Qid -> ILPClause [ctor] .
+  op isCovered : Term ILPClauseSet TermList -> Bool .
+  eq isCovered(P, emptyClauseSet, BK) = false .
+  eq isCovered(P, C ++ CS, BK) =
+     if checkClause(C, P, BK) then true else isCovered(P, CS, BK) fi .
 
-  op addHead : Qid MetasubList -> MetasubList .
-  eq addHead(F, emptySub) = emptySub .
-  eq addHead(F, [Q, R] ++ MSL) = (F [A,B] :- Q [A,C] & R [C,B]) ++ addHead(F, MSL) .
-  eq addHead(F, Q ++ MSL) = (F [A,B] :- Q [A,B]) ++ addHead(F, MSL) .
+  --- 2. THUẬT TOÁN HỌC TỔNG QUÁT 
+  op learn : TermList TermList TermList ILPClauseSet TermList -> ILPClauseSet .
+  eq learn(empty, NEG, BK, CS, MRs) = CS .
+  eq learn((P, POS), NEG, BK, CS, MRs) =
+     if isCovered(P, CS, BK)
+     then learn(POS, NEG, BK, CS, MRs)
+     else $induceNewRule(P, POS, NEG, BK, CS, MRs, filterCandidates(applyAllMetarules(MRs, P, BK), NEG, BK)) fi .
+  eq learn(P, NEG, BK, CS, MRs) =
+     if isCovered(P, CS, BK)
+     then CS
+     else $induceNewRule(P, empty, NEG, BK, CS, MRs, filterCandidates(applyAllMetarules(MRs, P, BK), NEG, BK)) fi .
 
-  --- ---------------------------------------------------------
-  --- 3. ĐƯỜNG ĐI ĐA CHIỀU & BĂM CHUỖI (PI)
-  --- ---------------------------------------------------------
+  op $induceNewRule : Term TermList TermList TermList ILPClauseSet TermList ILPClauseSet -> ILPClauseSet .
+  eq $induceNewRule(P, POS, NEG, BK, CS, MRs, emptyClauseSet) = 
+     $handlePI(P, POS, NEG, BK, CS, MRs, searchPI(func(P), arg1(P), arg2(P), BK, 3, 5)) . 
+     
+  eq $induceNewRule(P, POS, NEG, BK, CS, MRs, C ++ CS2) =
+     learn(POS, NEG, BK, CS ++ C, MRs) [owise] .
+
+  --- 3. TRÍCH XUẤT KIỂU DỮ LIỆU ĐỘNG TỪ BÀI TOÁN (Dynamic Sort Extraction)
+  op extractSort : Term -> String .
+  eq extractSort(Q:Qid) =
+     if find(string(Q:Qid), ".", 0) =/= notFound
+     then substr(string(Q:Qid), find(string(Q:Qid), ".", 0) + 1, length(string(Q:Qid)))
+     else "FirstOrderVar" fi .
+  eq extractSort(T:Term) = "FirstOrderVar" [owise] .
+
+  op buildVar : String String -> Term .
+  eq buildVar(VStr, Srt) = qid(VStr + ":" + Srt) .
+
+  --- 4. PREDICATE INVENTION
   sort Path . 
   op end : Qid -> Path [ctor] .
   op step : Qid Path -> Path [ctor] .
-
   sort PathList . subsort Path < PathList .
   op emptyPL : -> PathList [ctor] .
   op _||_ : PathList PathList -> PathList [ctor assoc comm id: emptyPL] .
 
   op findPath : Term Term TermList TermList Nat -> PathList .
   eq findPath(A, B, empty, FullBK, N) = emptyPL .
+  
   eq findPath(A, B, (Fact, BK), FullBK, 1) =
-     if (getArg1(Fact) == A) and (getArg2(Fact) == B)
-     then end(getF(Fact)) || findPath(A, B, BK, FullBK, 1)
+     if (arg1(Fact) == A) and (arg2(Fact) == B)
+     then end(func(Fact)) || findPath(A, B, BK, FullBK, 1)
      else findPath(A, B, BK, FullBK, 1) fi .
+  eq findPath(A, B, Fact, FullBK, 1) =
+     if (arg1(Fact) == A) and (arg2(Fact) == B) then end(func(Fact)) else emptyPL fi .
+
   eq findPath(A, B, (Fact, BK), FullBK, s(s(N))) =
-     if (getArg1(Fact) == A)
-     then attach(getF(Fact), findPath(getArg2(Fact), B, FullBK, FullBK, s(N))) ||
-          findPath(A, B, BK, FullBK, s(s(N)))
+     if (arg1(Fact) == A)
+     then attach(func(Fact), findPath(arg2(Fact), B, FullBK, FullBK, s(N))) || findPath(A, B, BK, FullBK, s(s(N)))
      else findPath(A, B, BK, FullBK, s(s(N))) fi .
+  eq findPath(A, B, Fact, FullBK, s(s(N))) =
+     if (arg1(Fact) == A)
+     then attach(func(Fact), findPath(arg2(Fact), B, FullBK, FullBK, s(N))) else emptyPL fi .
 
   op attach : Qid PathList -> PathList .
   eq attach(Q, emptyPL) = emptyPL .
   eq attach(Q, P:Path || PL:PathList) = step(Q, P:Path) || attach(Q, PL:PathList) .
 
   op createInv : Nat -> Qid .
-  eq createInv(1) = 'inv1 . eq createInv(2) = 'inv2 .
-  eq createInv(3) = 'inv3 . eq createInv(4) = 'inv4 .
-  eq createInv(5) = 'inv5 . eq createInv(6) = 'inv6 .
-  eq createInv(N) = 'invX [owise] .
+  eq createInv(1) = 'inv1.Pred . eq createInv(2) = 'inv2.Pred .
+  eq createInv(3) = 'inv3.Pred . eq createInv(4) = 'inv4.Pred .
+  eq createInv(N) = 'invX.Pred [owise] .
 
-  op chunkPath : Qid Path Nat -> MetasubList .
-  eq chunkPath(Head, step(Q, end(R)), N) = (Head [A,B] :- Q [A,C] & R [C,B]) . 
-  eq chunkPath(Head, step(Q, step(R, Rest:Path)), N) =
-     (Head [A,B] :- Q [A,C] & createInv(N) [C,B]) ++ chunkPath(createInv(N), step(R, Rest:Path), s(N)) .
+  --- ĐÃ SỬA: Đồng bộ dùng << >> thay cho { }
+  op chunkPath : Qid Path Nat String -> ILPClauseSet .
+  eq chunkPath(F, step(Q, end(R)), N, Srt) = 
+     (F << buildVar("A", Srt), buildVar("B", Srt) >> :- Q << buildVar("A", Srt), buildVar("C", Srt) >> & R << buildVar("C", Srt), buildVar("B", Srt) >>) . 
+  eq chunkPath(F, step(Q, step(R, Rest)), N, Srt) =
+     (F << buildVar("A", Srt), buildVar("B", Srt) >> :- Q << buildVar("A", Srt), buildVar("C", Srt) >> & createInv(N) << buildVar("C", Srt), buildVar("B", Srt) >>) ++ 
+     chunkPath(createInv(N), step(R, Rest), s(N), Srt) .
 
-  --- ---------------------------------------------------------
-  --- 4. LỌC NEG VÀ BAO PHỦ 
-  --- ---------------------------------------------------------
-  op violatesNEG : MetasubList TermList TermList -> Bool .
-  eq violatesNEG(MSL, empty, BK) = false .
-  eq violatesNEG((Head [A,B] :- Q [A,C] & R [C,B]), (P, NEG), BK) =
-     if (Head == getF(P)) and checkChainGiven(Q, R, getArg1(P), getArg2(P), BK, BK)
-     then true else violatesNEG((Head [A,B] :- Q [A,C] & R [C,B]), NEG, BK) fi .
-  eq violatesNEG((Head [A,B] :- Q [A,B]), (P, NEG), BK) =
-     if (Head == getF(P)) and checkFactGiven(Q, getArg1(P), getArg2(P), BK)
-     then true else violatesNEG((Head [A,B] :- Q [A,B]), NEG, BK) fi .
-
-  op filterCandidates : MetasubList TermList TermList -> MetasubList .
-  eq filterCandidates(emptySub, NEG, BK) = emptySub .
-  eq filterCandidates((Head [A,B] :- Q [A,C] & R [C,B]) ++ MSL, NEG, BK) =
-     if violatesNEG((Head [A,B] :- Q [A,C] & R [C,B]), NEG, BK) 
-     then filterCandidates(MSL, NEG, BK)
-     else (Head [A,B] :- Q [A,C] & R [C,B]) ++ filterCandidates(MSL, NEG, BK) fi .
-  eq filterCandidates((Head [A,B] :- Q [A,B]) ++ MSL, NEG, BK) =
-     if violatesNEG((Head [A,B] :- Q [A,B]), NEG, BK) 
-     then filterCandidates(MSL, NEG, BK)
-     else (Head [A,B] :- Q [A,B]) ++ filterCandidates(MSL, NEG, BK) fi .
-
-  op isCovered : Term MetasubList TermList -> Bool .
-  eq isCovered(P, emptySub, BK) = false .
-  eq isCovered(P, (Head [A,B] :- Q [A,C] & R [C,B]) ++ Prog, BK) =
-     if (Head == getF(P)) and checkChainGiven(Q, R, getArg1(P), getArg2(P), BK, BK)
-     then true else isCovered(P, Prog, BK) fi .
-  eq isCovered(P, (Head [A,B] :- Q [A,B]) ++ Prog, BK) =
-     if (Head == getF(P)) and checkFactGiven(Q, getArg1(P), getArg2(P), BK)
-     then true else isCovered(P, Prog, BK) fi .
-  eq isCovered(P, MSL ++ Prog, BK) = isCovered(P, Prog, BK) [owise] .
-
-  --- ---------------------------------------------------------
-  --- 5. THUẬT TOÁN HỌC
-  --- ---------------------------------------------------------
-  op learn : TermList TermList TermList MetasubList -> MetasubList .
-  eq learn(empty, NEG, BK, Prog) = Prog .
-  eq learn((P, POS), NEG, BK, Prog) =
-     if isCovered(P, Prog, BK)
-     then learn(POS, NEG, BK, Prog)
-     else 
-        $induceNewRule(P, POS, NEG, BK, Prog, 
-           filterCandidates(
-              addHead(getF(P), proveChain(getArg1(P), getArg2(P), BK)) ++ 
-              addHead(getF(P), proveIdent(getArg1(P), getArg2(P), BK)), 
-           NEG, BK))
-     fi .
-
-  op $induceNewRule : Term TermList TermList TermList MetasubList MetasubList -> MetasubList .
-  eq $induceNewRule(P, POS, NEG, BK, Prog, emptySub) = 
-     $handlePI(P, POS, NEG, BK, Prog, searchPI(getArg1(P), getArg2(P), BK, 3, 5)) . 
-
-  eq $induceNewRule(P, POS, NEG, BK, Prog, Candidates:MetasubList) =
-     learn(POS, NEG, BK, Prog ++ getFirst(Candidates:MetasubList)) [owise] .
-
-  op getFirst : MetasubList -> MetasubList .
-  eq getFirst((Head [A,B] :- Q [A,C] & R [C,B]) ++ MSL) = (Head [A,B] :- Q [A,C] & R [C,B]) .
-  eq getFirst((Head [A,B] :- Q [A,B]) ++ MSL) = (Head [A,B] :- Q [A,B]) .
-  eq getFirst(emptySub) = emptySub .
-
-  op searchPI : Term Term TermList Nat Nat -> PathList .
-  eq searchPI(A, B, BK, Depth, MaxDepth) =
+  op searchPI : Qid Term Term TermList Nat Nat -> PathList .
+  eq searchPI(F, A, B, BK, Depth, MaxDepth) =
      if Depth > MaxDepth then emptyPL
-     else $evalPI(A, B, BK, Depth, MaxDepth, findPath(A, B, BK, BK, Depth)) fi .
+     else $evalPI(F, A, B, BK, Depth, MaxDepth, findPath(A, B, BK, BK, Depth)) fi .
 
-  op $evalPI : Term Term TermList Nat Nat PathList -> PathList .
-  eq $evalPI(A, B, BK, Depth, MaxDepth, emptyPL) = searchPI(A, B, BK, Depth + 1, MaxDepth) .
-  eq $evalPI(A, B, BK, Depth, MaxDepth, Pth:Path || PL:PathList) = Pth:Path || PL:PathList .
+  op $evalPI : Qid Term Term TermList Nat Nat PathList -> PathList .
+  eq $evalPI(F, A, B, BK, Depth, MaxDepth, emptyPL) = searchPI(F, A, B, BK, Depth + 1, MaxDepth) .
+  eq $evalPI(F, A, B, BK, Depth, MaxDepth, Pth:Path || PL:PathList) = Pth:Path || PL:PathList .
 
-  op $handlePI : Term TermList TermList TermList MetasubList PathList -> MetasubList .
-  eq $handlePI(P, POS, NEG, BK, Prog, emptyPL) = Prog .
-  eq $handlePI(P, POS, NEG, BK, Prog, Pth:Path || PL:PathList) =
-     learn(POS, NEG, BK, Prog ++ chunkPath(getF(P), Pth:Path, 1)) [owise] .
+  op $handlePI : Term TermList TermList TermList ILPClauseSet TermList PathList -> ILPClauseSet .
+  eq $handlePI(P, POS, NEG, BK, CS, MRs, emptyPL) = CS .
+  
+  --- Lấy tham số đầu tiên (arg1(P)) đưa cho hàm extractSort để dò Type
+  eq $handlePI(P, POS, NEG, BK, CS, MRs, Pth:Path || PL:PathList) =
+     learn(POS, NEG, BK, CS ++ chunkPath(func(P), Pth:Path, 1, extractSort(arg1(P))), MRs) [owise] .
 
 endfm

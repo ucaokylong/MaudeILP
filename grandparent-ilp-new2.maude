@@ -22,6 +22,10 @@ fmod GRANDPARENT-ILP-NEW2 is
     father(andy,  spongebob)
     father(gavin, amelia) .
 
+
+--- eq T \in (T TS) = true .
+ --- eq T \in TS = false [owise] .
+
   eq POS =
     grandparent(ann,   amelia)
     grandparent(steve, amelia)
@@ -42,3 +46,4 @@ fmod GRANDPARENT-ILP-NEW2 is
     metarule([P | Q | R], [P : A,B], [Q : A,C] [R : C,B]) [nonexec] .
 
 endfm
+

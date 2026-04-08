@@ -3,75 +3,161 @@ load ILP-EXTRACT.maude
 fmod ILP-CORE-ENGINE is
   protecting ILP-EXTRACT .
 
-  vars A B C : Term . vars F Q R : Qid . vars Fact T : Term . 
-  vars TL BK : TermList . vars N : Nat .
+  --- 1. CẤU TRÚC KẾT QUẢ (Dùng << >> thay cho { } để tránh đụng chạm META-MODULE)
+  sort BoundLiteral BoundBody ILPClause ILPClauseSet .
+  subsort BoundLiteral < BoundBody .
+  subsort ILPClause < ILPClauseSet .
 
-  --- 1. CÔNG CỤ CƠ BẢN
-  op nth : TermList Nat -> Term .
-  eq nth((T, TL), 0) = T .
-  eq nth((T, TL), s(N)) = nth(TL, N) .
-  eq nth(T, 0) = T [owise] .
-
-  --- 2. BÓC TÁCH SỰ KIỆN TỪ BK (Fix lỗi multiple parses)
-  op getF : Term -> Qid .
-  eq getF(F:Qid[TL]) = F:Qid .
-  eq getF(T) = 'nil [owise] .
-
-  op getArg1 : Term -> Term .
-  eq getArg1(F:Qid[TL]) = nth(TL, 0) .
-  eq getArg1(T) = 'nil [owise] .
-
-  op getArg2 : Term -> Term .
-  eq getArg2(F:Qid[TL]) = nth(TL, 1) .
-  eq getArg2(T) = 'nil [owise] .
-
-  --- 3. CẤU TRÚC LƯU METASUB (Fix lỗi trùng lặp _|_)
-  sort QidPair .
-  op [_,_] : Qid Qid -> QidPair [ctor] . 
+  op _<<_>> : Qid TermList -> BoundLiteral [ctor prec 30] .
+  op emptyBB : -> BoundBody [ctor] .
+  op _&_ : BoundBody BoundBody -> BoundBody [ctor assoc id: emptyBB prec 40] .
+  op _:-_ : BoundLiteral BoundBody -> ILPClause [ctor prec 50] .
   
-  sort MetasubList .
-  subsort QidPair Qid < MetasubList . 
-  op emptySub : -> MetasubList [ctor] .
-  --- Dùng _++_ thay vì _|_ để tránh đụng hàng với ILP-EXTRACT
-  op _++_ : MetasubList MetasubList -> MetasubList [ctor assoc comm id: emptySub] .
-  eq X:MetasubList ++ X:MetasubList = X:MetasubList .
+  op emptyClauseSet : -> ILPClauseSet [ctor] .
+  op _++_ : ILPClauseSet ILPClauseSet -> ILPClauseSet [ctor assoc comm idem id: emptyClauseSet] .
 
-  --- 4. BƯỚC 1: Tìm Q(A, C)
-  sort QCTerm . op qc : Qid Term -> QCTerm [ctor] . --- Dùng qc thay vì [_,_] để tránh trùng
-  sort QCList . subsort QCTerm < QCList .
-  op emptyQC : -> QCList [ctor] .
-  op _@@_ : QCList QCList -> QCList [ctor assoc id: emptyQC] .
+  --- 2. KHAI BÁO BIẾN TOÀN CỤC
+  vars T V Fact P MR : Term . vars TL TL1 TL2 BK FullBK Args : TermList .
+  vars E : Env . vars E? : Env? . vars BindV : BindVal .
+  vars Q F : Qid . vars SOV : Term . vars FOVList : Term .
+  vars Lit HeadLit : BoundLiteral . vars Body RestBody : BoundBody .
+  vars ES : EnvSet . vars CS : ILPClauseSet .
 
-  op findQC : Term TermList -> QCList .
-  eq findQC(A, empty) = emptyQC .
-  eq findQC(A, (Fact, BK)) =
-     if getArg1(Fact) == A 
-     then qc(getF(Fact), getArg2(Fact)) @@ findQC(A, BK)
-     else findQC(A, BK) fi .
+  --- 3. BỘ NHỚ BIẾN (Environment)
+  sort BindVal Bind Env Env? .
+  subsort Term Qid < BindVal .   
+  subsort Bind < Env . subsort Env < Env? .
+  
+  op _->_ : Term BindVal -> Bind [ctor] .
+  op emptyEnv : -> Env [ctor] .
+  op _,_ : Env Env -> Env [ctor assoc comm id: emptyEnv] .
+  op failEnv : -> Env? [ctor] .
 
-  --- 5. BƯỚC 2: Tìm R(C, B)
-  op findR : Term Term TermList -> MetasubList .
-  eq findR(C, B, empty) = emptySub .
-  eq findR(C, B, (Fact, BK)) =
-     if (getArg1(Fact) == C) and (getArg2(Fact) == B) 
-     then getF(Fact) ++ findR(C, B, BK)
-     else findR(C, B, BK) fi .
+  op getVar : Term Env? -> BindVal .
+  eq getVar(V, E , (V -> BindV)) = BindV .
+  eq getVar(V, E?) = 'nil.Term [owise] .
 
-  --- 6. BƯỚC 3: Chứng minh Chain Rule
-  op proveChain : Term Term TermList -> MetasubList .
-  eq proveChain(A, B, BK) = $exploreQC(findQC(A, BK), B, BK) .
+  op bindVar : Term BindVal Env? -> Env? .
+  eq bindVar(V, BindV, failEnv) = failEnv .
+  eq bindVar(V, BindV, E) =
+     if getVar(V, E) == 'nil.Term then E , (V -> BindV)
+     else (if getVar(V, E) == BindV then E else failEnv fi) fi .
 
-  op $exploreQC : QCList Term TermList -> MetasubList .
-  eq $exploreQC(emptyQC, B, BK) = emptySub .
-  eq $exploreQC(qc(Q, C) @@ QCL:QCList, B, BK) =
-     $combineQR(Q, findR(C, B, BK)) ++ $exploreQC(QCL:QCList, B, BK) .
+  --- 4. TRÍCH XUẤT CÚ PHÁP META-LEVEL
+  op func : Term -> Qid .
+  eq func(F[TL]) = F . 
+  eq func(F) = F .
+  eq func(T) = 'nil [owise] .
 
-  op $combineQR : Qid MetasubList -> MetasubList .
-  eq $combineQR(Q, emptySub) = emptySub .
-  eq $combineQR(Q, R ++ RL:MetasubList) = [Q, R] ++ $combineQR(Q, RL:MetasubList) .
+  op getArgs : Term -> TermList .
+  eq getArgs(F[TL]) = TL . 
+  eq getArgs(T) = empty [owise] .
 
-  --- 7. Chứng minh Ident Rule
-  op proveIdent : Term Term TermList -> MetasubList .
-  eq proveIdent(A, B, BK) = findR(A, B, BK) .
+  op arg1 : Term -> Term .
+  eq arg1(F[T, TL]) = T .
+  eq arg1(T) = 'nil.Term [owise] .
+
+  op arg2 : Term -> Term .
+  eq arg2(F[T, V, TL]) = V .
+  eq arg2(T) = 'nil.Term [owise] .
+
+  op extractFOVs : Term -> TermList .
+  eq extractFOVs('_`,_[TL]) = TL .
+  eq extractFOVs(T) = T [owise] .
+
+  op getHead : Term -> Term .
+  eq getHead('metarule[SOV, T, V]) = T .
+
+  op getBody : Term -> Term .
+  eq getBody('metarule[SOV, T, V]) = V .
+
+  op extractLiterals : Term -> TermList .
+  eq extractLiterals('__[TL]) = TL .
+  eq extractLiterals('nilMB.MetaBody) = empty .
+  eq extractLiterals(T) = T [owise] .
+
+  --- 5. KHỚP MẪU VÀ DUYỆT ĐỘNG CƠ 
+  op matchArgs : TermList TermList Env? -> Env? .
+  eq matchArgs(empty, empty, E?) = E? .
+  eq matchArgs((V, TL1), (T, TL2), E?) = matchArgs(TL1, TL2, bindVar(V, T, E?)) .
+  eq matchArgs(V, T, E?) = bindVar(V, T, E?) .
+  eq matchArgs(TL1, TL2, E?) = failEnv [owise] .
+
+  op matchLiteral : Term Term Env? -> Env? .
+  eq matchLiteral(T, Fact, failEnv) = failEnv .
+  eq matchLiteral('`[_:_`][SOV, FOVList], Fact, E) =
+     matchArgs(extractFOVs(FOVList), getArgs(Fact), bindVar(SOV, func(Fact), E)) .
+
+  sort EnvSet . subsort Env < EnvSet .
+  op emptyEnvSet : -> EnvSet [ctor] .
+  op _++_ : EnvSet EnvSet -> EnvSet [ctor assoc comm idem id: emptyEnvSet] .
+
+  op proveBody : TermList Env? TermList TermList -> EnvSet .
+  eq proveBody(TL, failEnv, BK, FullBK) = emptyEnvSet .
+  eq proveBody(empty, E, BK, FullBK) = E .
+  
+  op proveBodyLit : Term TermList Env TermList TermList -> EnvSet .
+  eq proveBody((T, TL), E, BK, FullBK) = proveBodyLit(T, TL, E, BK, FullBK) .
+  eq proveBody(T, E, BK, FullBK) = proveBodyLit(T, empty, E, BK, FullBK) .
+
+  eq proveBodyLit(T, TL, E, empty, FullBK) = emptyEnvSet .
+  eq proveBodyLit(T, TL, E, (Fact, BK), FullBK) =
+     proveBody(TL, matchLiteral(T, Fact, E), FullBK, FullBK) ++
+     proveBodyLit(T, TL, E, BK, FullBK) .
+  eq proveBodyLit(T, TL, E, Fact, FullBK) =
+     proveBody(TL, matchLiteral(T, Fact, E), FullBK, FullBK) .
+
+  --- 6. KIỂM TRA LUẬT TỔNG QUÁT 
+  op matchBoundLiteral : BoundLiteral Term Env? -> Env? .
+  eq matchBoundLiteral(Q << Args >>, Fact, E?) =
+     if func(Fact) == Q then matchArgs(Args, getArgs(Fact), E?) else failEnv fi .
+
+  op checkBoundBody : BoundBody Env? TermList TermList -> Bool .
+  eq checkBoundBody(Body, failEnv, BK, FullBK) = false .
+  eq checkBoundBody(emptyBB, E, BK, FullBK) = true .
+  
+  op checkBoundBodyLit : BoundLiteral BoundBody Env TermList TermList -> Bool .
+  eq checkBoundBody(Lit & RestBody, E, BK, FullBK) = checkBoundBodyLit(Lit, RestBody, E, BK, FullBK) .
+     
+  eq checkBoundBodyLit(Lit, RestBody, E, empty, FullBK) = false .
+  eq checkBoundBodyLit(Lit, RestBody, E, (Fact, BK), FullBK) =
+     if checkBoundBody(RestBody, matchBoundLiteral(Lit, Fact, E), FullBK, FullBK)
+     then true else checkBoundBodyLit(Lit, RestBody, E, BK, FullBK) fi .
+  eq checkBoundBodyLit(Lit, RestBody, E, Fact, FullBK) =
+     checkBoundBody(RestBody, matchBoundLiteral(Lit, Fact, E), FullBK, FullBK) .
+
+  op checkClause : ILPClause Term TermList -> Bool .
+  eq checkClause((HeadLit :- Body), P, BK) =
+     checkBoundBody(Body, matchBoundLiteral(HeadLit, P, emptyEnv), BK, BK) .
+
+  --- 7. ĐÚC LUẬT RA KẾT QUẢ
+  op getQid : BindVal -> Qid .
+  eq getQid(Q) = Q .
+  eq getQid(T) = 'nil .
+
+  op instLit : Term Env -> BoundLiteral .
+  eq instLit('`[_:_`][SOV, FOVList], E) = 
+     getQid(getVar(SOV, E)) << extractFOVs(FOVList) >> .
+
+  op instBody : TermList Env -> BoundBody .
+  eq instBody(empty, E) = emptyBB .
+  eq instBody((T, TL), E) = instLit(T, E) & instBody(TL, E) .
+  eq instBody(T, E) = instLit(T, E) . 
+
+  op instantiate : Term Env -> ILPClause .
+  eq instantiate(MR, E) = (instLit(getHead(MR), E) :- instBody(extractLiterals(getBody(MR)), E)) .
+
+  op extractClauses : Term EnvSet -> ILPClauseSet .
+  eq extractClauses(MR, emptyEnvSet) = emptyClauseSet .
+  eq extractClauses(MR, E ++ ES) = instantiate(MR, E) ++ extractClauses(MR, ES) .
+
+  op applyMetarule : Term Term TermList -> ILPClauseSet .
+  eq applyMetarule(MR, P, BK) =
+     extractClauses(MR, proveBody(extractLiterals(getBody(MR)), matchLiteral(getHead(MR), P, emptyEnv), BK, BK)) .
+
+  op applyAllMetarules : TermList Term TermList -> ILPClauseSet .
+  eq applyAllMetarules(empty, P, BK) = emptyClauseSet .
+  eq applyAllMetarules((MR, TL), P, BK) = applyMetarule(MR, P, BK) ++ applyAllMetarules(TL, P, BK) .
+  eq applyAllMetarules(MR, P, BK) = applyMetarule(MR, P, BK) .
 
 endfm
