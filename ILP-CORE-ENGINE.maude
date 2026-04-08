@@ -3,7 +3,7 @@ load ILP-EXTRACT.maude
 fmod ILP-CORE-ENGINE is
   protecting ILP-EXTRACT .
 
-  --- 1. CẤU TRÚC KẾT QUẢ (Dùng << >> thay cho { } để tránh đụng chạm META-MODULE)
+  --- 1. CẤU TRÚC KẾT QUẢ
   sort BoundLiteral BoundBody ILPClause ILPClauseSet .
   subsort BoundLiteral < BoundBody .
   subsort ILPClause < ILPClauseSet .
@@ -75,6 +75,11 @@ fmod ILP-CORE-ENGINE is
   eq extractLiterals('__[TL]) = TL .
   eq extractLiterals('nilMB.MetaBody) = empty .
   eq extractLiterals(T) = T [owise] .
+
+  op extractMetarules : Term -> TermList .
+  eq extractMetarules('__[TL]) = TL .
+  eq extractMetarules('nilMR.MetaruleList) = empty .
+  eq extractMetarules(T) = T [owise] .
 
   --- 5. KHỚP MẪU VÀ DUYỆT ĐỘNG CƠ 
   op matchArgs : TermList TermList Env? -> Env? .

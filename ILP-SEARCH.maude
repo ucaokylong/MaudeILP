@@ -91,7 +91,6 @@ fmod ILP-SEARCH is
   eq createInv(3) = 'inv3.Pred . eq createInv(4) = 'inv4.Pred .
   eq createInv(N) = 'invX.Pred [owise] .
 
-  --- ĐÃ SỬA: Đồng bộ dùng << >> thay cho { }
   op chunkPath : Qid Path Nat String -> ILPClauseSet .
   eq chunkPath(F, step(Q, end(R)), N, Srt) = 
      (F << buildVar("A", Srt), buildVar("B", Srt) >> :- Q << buildVar("A", Srt), buildVar("C", Srt) >> & R << buildVar("C", Srt), buildVar("B", Srt) >>) . 
@@ -111,7 +110,6 @@ fmod ILP-SEARCH is
   op $handlePI : Term TermList TermList TermList ILPClauseSet TermList PathList -> ILPClauseSet .
   eq $handlePI(P, POS, NEG, BK, CS, MRs, emptyPL) = CS .
   
-  --- Lấy tham số đầu tiên (arg1(P)) đưa cho hàm extractSort để dò Type
   eq $handlePI(P, POS, NEG, BK, CS, MRs, Pth:Path || PL:PathList) =
      learn(POS, NEG, BK, CS ++ chunkPath(func(P), Pth:Path, 1, extractSort(arg1(P))), MRs) [owise] .
 

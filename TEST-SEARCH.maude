@@ -21,7 +21,6 @@ fmod TEST-SEARCH is
   op MR-Data : -> TermList . 
   eq MR-Data = extractMetarules(getEqRhs(M-PROB, 'METARULES)) .
 
-  --- Chạy thuật toán Metagol (Set Cover)
   op Induced-Program : -> ILPClauseSet .
   eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptyClauseSet, MR-Data) .
 

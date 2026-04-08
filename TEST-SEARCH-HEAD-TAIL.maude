@@ -13,17 +13,13 @@ fmod TEST-SEARCH-HEAD-TAIL is
   op NEG-Data : -> TermList . eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
   op BK-Data : -> TermList . eq BK-Data = flattenList(getEqRhs(M-PROB, 'BK)) .
 
-  --- Lấy danh sách Metarules động từ file người dùng
   op MR-Data : -> TermList . 
   eq MR-Data = extractMetarules(getEqRhs(M-PROB, 'METARULES)) .
 
-  --- Chạy thuật toán Metagol (Kỳ vọng máy bế tắc và bật Predicate Invention)
   op Induced-Program : -> ILPClauseSet .
   eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptyClauseSet, MR-Data) .
 
 endfm
 
 set trace off .
-
---- Chạy kiểm thử Predicate Invention
 reduce in TEST-SEARCH-HEAD-TAIL : Induced-Program .
