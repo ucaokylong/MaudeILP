@@ -94,5 +94,5 @@ fmod ILP-EXTRACT is
 
   op getMetarules : [Module] -> TermList . eq getMetarules(M) = flattenList(getEqRhs(M, 'METARULES)) .
   
-  --- Đã xóa bỏ phần code rác về Subst ở dưới cùng gây cảnh báo
+ 
 endfm
