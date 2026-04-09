@@ -11,7 +11,10 @@ fmod TEST-SEARCH-HEAD-TAIL is
   
   op POS-Data : -> TermList . eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
   op NEG-Data : -> TermList . eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
-  op BK-Data : -> TermList . eq BK-Data = flattenList(getEqRhs(M-PROB, 'BK)) .
+  
+  --- ĐÃ SỬA: Chuyển BK thành TermSet O(1) bằng hàm listToSet
+  op BK-Data : -> TermSet . 
+  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
 
   op MR-Data : -> TermList . 
   eq MR-Data = extractMetarules(getEqRhs(M-PROB, 'METARULES)) .
