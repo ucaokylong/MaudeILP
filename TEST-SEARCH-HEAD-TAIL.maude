@@ -21,4 +21,5 @@ fmod TEST-SEARCH-HEAD-TAIL is
 endfm
 
 --- LỆNH THỰC THI PHẢI NẰM SAU ENDFM
+set show timing on .
 reduce in TEST-SEARCH-HEAD-TAIL : simulate(Induced-Program) .

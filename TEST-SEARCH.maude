@@ -26,4 +26,5 @@ fmod TEST-SEARCH is
 endfm
 
 --- LỆNH NÀY PHẢI NẰM NGOÀI ENDFM
+set show timing on .
 reduce in TEST-SEARCH : simulate(Induced-Program) .

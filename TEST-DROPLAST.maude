@@ -26,4 +26,5 @@ fmod TEST-DROP-LAST is
 endfm
 
 --- Lệnh thực thi để thấy kết quả Object-level sạch sẽ
+set show timing on .
 reduce in TEST-DROP-LAST : simulate(Induced-Program) .
