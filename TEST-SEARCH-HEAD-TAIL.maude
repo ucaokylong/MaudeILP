@@ -11,18 +11,14 @@ fmod TEST-SEARCH-HEAD-TAIL is
   
   op POS-Data : -> TermList . eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
   op NEG-Data : -> TermList . eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
-  
-  --- ĐÃ SỬA: Chuyển BK thành TermSet O(1) bằng hàm listToSet
   op BK-Data : -> TermSet . 
   eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
-
   op MR-Data : -> TermList . 
-  eq MR-Data = extractMetarules(getEqRhs(M-PROB, 'METARULES)) .
+  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
 
   op Induced-Program : -> ILPClauseSet .
   eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptyClauseSet, MR-Data) .
-
 endfm
 
-set trace off .
-reduce in TEST-SEARCH-HEAD-TAIL : Induced-Program .
+--- LỆNH THỰC THI PHẢI NẰM SAU ENDFM
+reduce in TEST-SEARCH-HEAD-TAIL : simulate(Induced-Program) .

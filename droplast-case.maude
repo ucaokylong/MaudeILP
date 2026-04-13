@@ -1,0 +1,47 @@
+load METARULE.maude
+
+fmod MAP-DROPLAST-CASE is
+  protecting METARULE .
+
+  --- 1. Định nghĩa kiểu
+  sort List .
+  subsort List < Entity .
+
+  --- 2. Tên chuẩn CamelCase 
+  ops l1In l1Mid l1Out l2In l2Mid l2Out : -> List [ctor] .
+
+  --- 3. KHAI BÁO VAI TRÒ CỦA VỊ TỪ
+  op myDroplast : -> Pred [ctor] . --- Vai trò 1: Tên hàm (để truyền vào map)
+  op myDroplast : List List -> Pred [ctor] . --- Vai trò 2: Hàm thực thi
+  
+  ops f : List List -> Pred [ctor] .
+  op map : List List Pred -> Pred [ctor] .
+
+  --- 4. BACKGROUND KNOWLEDGE (Đã bọc ngoặc đơn để chống lỗi Parser)
+  eq BK =
+    (map(l1In, l1Mid, myDroplast))
+    (myDroplast(l1Mid, l1Out))
+    (map(l2In, l2Mid, myDroplast))
+    (myDroplast(l2Mid, l2Out)) .
+
+  --- 5. POSITIVE EXAMPLES
+  eq POS =
+    (f(l1In, l1Out))
+    (f(l2In, l2Out)) .
+
+
+  ops P Q R F : -> Pred .
+  ops A B C : -> List .
+
+  --- 6. METARULES
+  eq METARULES =
+    metarule([P | Q],         [P : A],    [Q : A])
+    metarule([P | Q | R],     [P : A],    [Q : A] [R : A])
+    metarule([P | Q],         [P : A, B], [Q : A, B])
+    metarule([P | Q | F],     [P : A, B], [Q : A, B, F])
+    metarule([P | Q | R],     [P : A, B], [Q : A, C] [R : C, B])
+    metarule([P | Q | R],     [P : A, B], [Q : A, B] [R : A, B])
+    metarule([P | Q | R],     [P : A, B], [Q : A, B] [R : A])
+    metarule([P | Q | R],     [P : A, B], [Q : A, B] [R : B]) .
+
+endfm

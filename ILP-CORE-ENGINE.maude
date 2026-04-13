@@ -162,3 +162,37 @@ fmod ILP-CORE-ENGINE is
   eq applyAllMetarules(MR, P, TS) = applyMetarule(MR, P, TS) .
 
 endfm
+
+fmod ILP-DISPLAY is
+  protecting ILP-CORE-ENGINE .
+  protecting CONVERSION .
+
+  vars Q : Qid . vars TL : TermList . vars C : ILPClause . vars CS : ILPClauseSet .
+  vars B : BoundBody . vars L : BoundLiteral . vars T : Term .
+
+  op cleanName : Term -> String .
+  eq cleanName(T) = beforeDot(string(getName(T))) .
+
+  op showTL : TermList -> String .
+  eq showTL(empty) = "" .
+  eq showTL(T) = cleanName(T) .
+  eq showTL((T, TL)) = cleanName(T) + "," + showTL(TL) .
+
+  op showLit : BoundLiteral -> String .
+  eq showLit(Q << TL >>) = string(Q) + "(" + showTL(TL) + ")" .
+
+  op showBody : BoundBody -> String .
+  eq showBody(emptyBB) = "." .
+  eq showBody(L) = showLit(L) + " ." .
+  eq showBody(L & B) = showLit(L) + ", " + showBody(B) .
+
+  op showClause : ILPClause -> String .
+  eq showClause(L :- B) = showLit(L) + " :- " + showBody(B) .
+
+  op simulate : ILPClauseSet -> String .
+  eq simulate(emptyClauseSet) = "" .
+  
+  --- Dùng 3 khoảng trắng để cách các Rule ra trên cùng 1 dòng
+  eq simulate(C ++ CS) = 
+     showClause(C) + (if CS == emptyClauseSet then "" else "   " fi) + simulate(CS) .
+endfm

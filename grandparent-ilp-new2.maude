@@ -23,9 +23,6 @@ fmod GRANDPARENT-ILP-NEW2 is
     father(gavin, amelia) .
 
 
---- eq T \in (T TS) = true .
- --- eq T \in TS = false [owise] .
-
   eq POS =
     grandparent(ann,   amelia)
     grandparent(steve, amelia)

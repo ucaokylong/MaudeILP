@@ -1,49 +1,89 @@
 --- ============================================================
 --- ILP-CORE.maude
---- Hạ tầng tổng hợp cho Framework ILP (Meta-level Ready)
+--- Hạ tầng tổng hợp cho Framework ILP (Đã Tái Cấu Trúc - Single List)
 --- ============================================================
 
---- 1. Định nghĩa Thực thể
-fmod ENTITY is
-  sort Entity .
+--- 1. Định nghĩa Kiểu cơ sở chung (Gộp Entity và Pred vào 1 nhà)
+fmod ILP-BASE-ITEM is
+  sorts Entity Pred BaseItem .
+  subsorts Entity Pred < BaseItem .
 endfm
 
---- 2. Định nghĩa Vị từ (Phải nhìn thấy ENTITY để dùng sort Entity)
-fmod PRED is
-  protecting ENTITY .
-  sort Pred .
-endfm
-
---- 3. Các View để sử dụng thư viện LIST có sẵn của Maude
-view Entity from TRIV to ENTITY is
-  sort Elt to Entity .
+--- 2. Tạo View chung cho cấu trúc List
+view BaseItem from TRIV to ILP-BASE-ITEM is
+  sort Elt to BaseItem .
 endv
 
-view Pred from TRIV to PRED is
-  sort Elt to Pred .
-endv
-
---- 4. Hệ thống danh sách (Dùng để chứa kết quả trích xuất Meta-level)
-fmod ENTITY-LIST is
-  protecting LIST{Entity} * (
-    sort NeList{Entity} to NeEntityList, 
-    sort List{Entity} to EntityList, 
-    op nil to nilEL
+--- 3. Khởi tạo DUY NHẤT một danh sách để tránh đụng độ (Tránh Diamond Inheritance)
+fmod ILP-LIST is
+  protecting LIST{BaseItem} * (
+    sort NeList{BaseItem} to NeILPList, 
+    sort List{BaseItem} to ILPList, 
+    op nil to nilILP
   ) .
 endfm
 
-fmod PRED-LIST is
-  protecting LIST{Pred} * (
-    sort NeList{Pred} to NePredList,
-    sort List{Pred} to PredList, 
-    op nil to nilPL
-  ) .
-endfm
-
---- 5. Interface chính cho mọi bài toán ILP
+--- 4. Interface chính cho mọi bài toán ILP
 fmod ILP-CORE is
-  protecting ENTITY-LIST .
-  protecting PRED-LIST .
+  protecting ILP-LIST .
 
-  ops BK POS NEG : -> PredList .
+  --- Khai báo BK, POS, NEG giờ dùng kiểu ILPList chung
+  ops BK POS NEG : -> ILPList .
 endfm
+
+
+
+
+
+
+
+
+--- --- ============================================================
+--- --- ILP-CORE.maude
+--- --- Hạ tầng tổng hợp cho Framework ILP (Meta-level Ready)
+--- --- ============================================================
+
+--- --- 1. Định nghĩa Thực thể
+--- fmod ENTITY is
+---   sort Entity .
+--- endfm
+
+--- --- 2. Định nghĩa Vị từ (Phải nhìn thấy ENTITY để dùng sort Entity)
+--- fmod PRED is
+---   protecting ENTITY .
+---   sort Pred .
+--- endfm
+
+--- --- 3. Các View để sử dụng thư viện LIST có sẵn của Maude
+--- view Entity from TRIV to ENTITY is
+---   sort Elt to Entity .
+--- endv
+
+--- view Pred from TRIV to PRED is
+---   sort Elt to Pred .
+--- endv
+
+--- --- 4. Hệ thống danh sách (Dùng để chứa kết quả trích xuất Meta-level)
+--- fmod ENTITY-LIST is
+---   protecting LIST{Entity} * (
+---     sort NeList{Entity} to NeEntityList, 
+---     sort List{Entity} to EntityList, 
+---     op nil to nilEL
+---   ) .
+--- endfm
+
+--- fmod PRED-LIST is
+---   protecting LIST{Pred} * (
+---     sort NeList{Pred} to NePredList,
+---     sort List{Pred} to PredList, 
+---     op nil to nilPL
+---   ) .
+--- endfm
+
+--- --- 5. Interface chính cho mọi bài toán ILP
+--- fmod ILP-CORE is
+---   protecting ENTITY-LIST .
+---   protecting PRED-LIST .
+
+---   ops BK POS NEG : -> PredList .
+--- endfm
