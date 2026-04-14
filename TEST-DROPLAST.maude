@@ -6,6 +6,8 @@ fmod TEST-DROP-LAST is
   protecting MAP-DROPLAST-CASE .
   protecting META-LEVEL .
 
+  eq MAX-DEPTH = 5 .
+  
   op M-PROB : -> [Module] .
   eq M-PROB = upModule('MAP-DROPLAST-CASE, false) .
   

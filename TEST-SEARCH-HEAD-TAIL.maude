@@ -6,6 +6,8 @@ fmod TEST-SEARCH-HEAD-TAIL is
   protecting HEAD-TAIL-CASE .
   protecting META-LEVEL .
 
+  eq MAX-DEPTH = 5 .
+
   op M-PROB : -> [Module] .
   eq M-PROB = upModule('HEAD-TAIL-CASE, false) .
   

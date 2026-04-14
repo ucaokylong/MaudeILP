@@ -6,6 +6,8 @@ fmod TEST-SEARCH is
   protecting GRANDPARENT-ILP-NEW2 .
   protecting META-LEVEL .
 
+  eq MAX-DEPTH = 5 .
+
   op M-PROB : -> [Module] .
   eq M-PROB = upModule('GRANDPARENT-ILP-NEW2, false) .
   
