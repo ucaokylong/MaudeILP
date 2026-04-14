@@ -6,20 +6,24 @@ fmod TEST-SEARCH-HEAD-TAIL is
   protecting HEAD-TAIL-CASE .
   protecting META-LEVEL .
 
+  --- Cấu hình độ sâu
+  eq MAX-DEPTH-VAL = 5 .
+
   op M-PROB : -> [Module] .
   eq M-PROB = upModule('HEAD-TAIL-CASE, false) .
   
   op POS-Data : -> TermList . eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
   op NEG-Data : -> TermList . eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
-  op BK-Data : -> TermSet . 
-  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
-  op MR-Data : -> TermList . 
-  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+  op BK-Data : -> TermSet . eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+  op MR-Data : -> TermList . eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
 
   op Induced-Program : -> ILPClauseSet .
   eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptyClauseSet, MR-Data) .
+
+  --- HIỂN THỊ DẠNG STRING ĐẸP
+  op Pretty-Program : -> String .
+  eq Pretty-Program = simulateEqs(getInducedEquations(Induced-Program)) .
 endfm
 
---- LỆNH THỰC THI PHẢI NẰM SAU ENDFM
 set show timing on .
-reduce in TEST-SEARCH-HEAD-TAIL : simulate(Induced-Program) .
+reduce in TEST-SEARCH-HEAD-TAIL : Pretty-Program .

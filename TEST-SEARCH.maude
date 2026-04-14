@@ -6,25 +6,24 @@ fmod TEST-SEARCH is
   protecting GRANDPARENT-ILP-NEW2 .
   protecting META-LEVEL .
 
+  --- THIẾT LẬP MAX-DEPTH (Sửa số này để benchmark)
+  eq MAX-DEPTH-VAL = 5 .
+
   op M-PROB : -> [Module] .
   eq M-PROB = upModule('GRANDPARENT-ILP-NEW2, false) .
   
-  op POS-Data : -> TermList .
-  eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
-  
-  op NEG-Data : -> TermList . 
-  eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
-  
-  op BK-Data : -> TermSet . 
-  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
-  
-  op MR-Data : -> TermList . 
-  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+  op POS-Data : -> TermList . eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+  op NEG-Data : -> TermList . eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+  op BK-Data : -> TermSet . eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+  op MR-Data : -> TermList . eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
 
   op Induced-Program : -> ILPClauseSet .
   eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptyClauseSet, MR-Data) .
+
+  --- HIỂN THỊ DẠNG STRING ĐẸP
+  op Pretty-Program : -> String .
+  eq Pretty-Program = simulateEqs(getInducedEquations(Induced-Program)) .
 endfm
 
---- LỆNH NÀY PHẢI NẰM NGOÀI ENDFM
 set show timing on .
-reduce in TEST-SEARCH : simulate(Induced-Program) .
+reduce in TEST-SEARCH : Pretty-Program .

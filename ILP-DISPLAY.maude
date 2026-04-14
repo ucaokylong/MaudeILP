@@ -1,0 +1,25 @@
+fmod ILP-DISPLAY is
+  protecting ILP-CORE-ENGINE .
+  protecting CONVERSION .
+
+  vars T T1 T2 : Term . vars Eq : Equation . vars EqS : EquationSet .
+  vars S S1 S2 : String . vars AS : AttrSet .
+
+  --- Hàm bóc tách meta-syntax (Xóa ', thay _and_ bằng ,)
+  op prettyTerm : Term -> String .
+  eq prettyTerm(T) = $clean(string(T)) .
+
+  op $clean : String -> String .
+  ceq $clean(S) = $clean(substr(S, 0, find(S, "'", 0)) + substr(S, find(S, "'", 0) + 1, length(S))) 
+    if find(S, "'", 0) =/= notFound .
+  ceq $clean(S) = substr(S, 0, find(S, "_and_", 0)) + ", " + $clean(substr(S, find(S, "_and_", 0) + 5, length(S)))
+    if find(S, "_and_", 0) =/= notFound .
+  eq $clean(S) = S [owise] .
+
+  op simulateEqs : EquationSet -> String .
+  eq simulateEqs(none) = "" .
+  eq simulateEqs(Eq EqS) = eqToString(Eq) + (if EqS == none then "" else "   " fi) + simulateEqs(EqS) .
+
+  op eqToString : Equation -> String .
+  eq eqToString(eq T1 = T2 [AS] .) = "eq " + prettyTerm(T1) + " = " + prettyTerm(T2) + " ." .
+endfm

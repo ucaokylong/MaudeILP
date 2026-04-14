@@ -6,25 +6,24 @@ fmod TEST-DROP-LAST is
   protecting MAP-DROPLAST-CASE .
   protecting META-LEVEL .
 
+  --- Cấu hình độ sâu
+  eq MAX-DEPTH-VAL = 5 .
+
   op M-PROB : -> [Module] .
   eq M-PROB = upModule('MAP-DROPLAST-CASE, false) .
   
-  op POS-Data : -> TermList . 
-  eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
-  
-  op NEG-Data : -> TermList . 
-  eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
-  
-  op BK-Data : -> TermSet . 
-  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
-
-  op MR-Data : -> TermList . 
-  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+  op POS-Data : -> TermList . eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+  op NEG-Data : -> TermList . eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+  op BK-Data : -> TermSet . eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+  op MR-Data : -> TermList . eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
 
   op Induced-Program : -> ILPClauseSet .
   eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptyClauseSet, MR-Data) .
+
+  --- HIỂN THỊ DẠNG STRING ĐẸP
+  op Pretty-Program : -> String .
+  eq Pretty-Program = simulateEqs(getInducedEquations(Induced-Program)) .
 endfm
 
---- Lệnh thực thi để thấy kết quả Object-level sạch sẽ
 set show timing on .
-reduce in TEST-DROP-LAST : simulate(Induced-Program) .
+reduce in TEST-DROP-LAST : Pretty-Program .
