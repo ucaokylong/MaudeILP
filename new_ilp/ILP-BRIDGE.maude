@@ -50,14 +50,18 @@ fmod ILP-BRIDGE is
   eq $flattenTL((T:Term , TL:TermList), Acc:TermList) = $flatten(T:Term, $flattenTL(TL:TermList, Acc:TermList)) .
 
   vars Q : Qid . vars TL POS NEG MR : TermList . vars T : Term .
-  vars Arg : LogicArg . vars AL Vocab : LogicArgList .
-  vars Lit : LogicLiteral . vars Body POS-Data NEG-Data : LogicBody .
-  vars C : Clause . vars H BK-Data : Hypothesis .
+  vars Arg : LogicArg . vars AL Vocab Learnable ExtraVocab : LogicArgList .
+  vars Lit : LogicLiteral .
+  vars Body POS-Data NEG-Data : LogicBody .
+  vars C : Clause . vars H BK-Data BK-Hyp : Hypothesis .
   var BK : TermSet . var MRs : MetaruleList .
+
+  op t : Term -> LogicArg [ctor] .
 
   op showArg : LogicArg -> String .
   eq showArg(v(N:Nat)) = "V" + string(N:Nat, 10) .
   eq showArg(q(Q)) = beforeDot(string(Q)) .
+  eq showArg(t(T)) = "List(..)" .
 
   op showAL : LogicArgList -> String .
   eq showAL(emptyArgList) = "" .
@@ -77,13 +81,15 @@ fmod ILP-BRIDGE is
 
   op simulate : Hypothesis -> String .
   eq simulate(emptyHypothesis) = "--- [NO SOLUTION FOUND] ---" .
-  eq simulate(C) = showClause(C) . 
+  eq simulate(C) = showClause(C) .
   eq simulate(C & H) = showClause(C) + "\n" + simulate(H) [owise] .
 
   op toArgs : TermList -> LogicArgList .
   eq toArgs(empty) = emptyArgList .
-  eq toArgs((T:Term , TL:TermList)) = q(getName(T:Term)) @ toArgs(TL:TermList) .
-  eq toArgs(T:Term) = q(getName(T:Term)) [owise] .
+  ceq toArgs((T:Term , TL:TermList)) = q(getName(T:Term)) @ toArgs(TL:TermList) if getName(T:Term) =/= 'nil .
+  ceq toArgs((T:Term , TL:TermList)) = t(T:Term) @ toArgs(TL:TermList) if getName(T:Term) == 'nil .
+  ceq toArgs(T:Term) = q(getName(T:Term)) if getName(T:Term) =/= 'nil .
+  ceq toArgs(T:Term) = t(T:Term) if getName(T:Term) == 'nil .
 
   op termToLiteral : Term -> LogicLiteral .
   eq termToLiteral(Q:Qid[TL:TermList]) = pred(Q:Qid, toArgs(TL:TermList)) .
@@ -92,7 +98,9 @@ fmod ILP-BRIDGE is
 
   op toBody : TermList -> LogicBody .
   eq toBody(empty) = emptyBody .
-  eq toBody((T:Term , TL:TermList)) = termToLiteral(T:Term) and toBody(TL:TermList) .
+  ceq toBody((T:Term , TL:TermList)) = emptyBody if getName(T:Term) == 'nilILP .
+  eq toBody((T:Term , TL:TermList)) = termToLiteral(T:Term) and toBody(TL:TermList) [owise] .
+  ceq toBody(T:Term) = emptyBody if getName(T:Term) == 'nilILP .
   eq toBody(T:Term) = termToLiteral(T:Term) [owise] .
 
   op setToHypothesis : TermSet -> Hypothesis .
@@ -101,12 +109,19 @@ fmod ILP-BRIDGE is
 
   op extractVocabTL : TermList -> LogicArgList .
   eq extractVocabTL(empty) = emptyArgList .
-  eq extractVocabTL((T:Term , TL:TermList)) = q(getFunctor(T:Term)) @ extractVocabTL(TL:TermList) .
+  ceq extractVocabTL((T:Term , TL:TermList)) = extractVocabTL(TL:TermList) if string(getName(T:Term)) == "nilILP.ILPList" .
+  eq extractVocabTL((T:Term , TL:TermList)) = q(getFunctor(T:Term)) @ extractVocabTL(TL:TermList) [owise] .
   eq extractVocabTL(T:Term) = q(getFunctor(T:Term)) [owise] .
 
   op extractVocabTS : TermSet -> LogicArgList .
   eq extractVocabTS(emptyTS) = emptyArgList .
-  eq extractVocabTS(T:Term U TS:TermSet) = q(getFunctor(T:Term)) @ extractVocabTS(TS:TermSet) .
+  ceq extractVocabTS(T:Term U TS:TermSet) = extractVocabTS(TS:TermSet) if string(getName(T:Term)) == "nilILP.ILPList" .
+  eq extractVocabTS(T:Term U TS:TermSet) = q(getFunctor(T:Term)) @ extractVocabTS(TS:TermSet) [owise] .
+
+  op extractVocabHyp : Hypothesis -> LogicArgList .
+  eq extractVocabHyp(emptyHypothesis) = emptyArgList .
+  eq extractVocabHyp((pred(Q, AL) :- Body) & H) = q(Q) @ extractVocabHyp(H) .
+  eq extractVocabHyp(C & H) = extractVocabHyp(H) [owise] .
 
   op removeAll : LogicArg LogicArgList -> LogicArgList .
   eq removeAll(Arg, emptyArgList) = emptyArgList .
@@ -126,10 +141,22 @@ fmod ILP-BRIDGE is
   op injectPI : -> LogicArgList .
   eq injectPI = q('inv1) @ q('inv2) .
 
+  --- CỔNG 4 THAM SỐ (Grandparent, HeadTail - CHO PHÉP INJECT PI)
   op runILP : TermList TermList TermSet TermList -> Hypothesis .
   eq runILP(POS, NEG, BK, MR) = 
-     greedyCover(toBody(POS), toBody(NEG), setToHypothesis(BK), emptyHypothesis, 
-                 buildBase(toMRList(MR), 
-                           removeDup(extractVocabTL(POS) @ extractVocabTS(BK) @ injectPI),
-                           removeDup(extractVocabTL(POS) @ injectPI))) .
+     $runILP(POS, NEG, setToHypothesis(BK), MR, 
+             removeDup(extractVocabTL(POS) @ extractVocabTS(BK) @ injectPI),
+             removeDup(extractVocabTL(POS) @ injectPI)) .
+
+  --- CỔNG 5 THAM SỐ (Cho String1 - ĐÃ XÓA INJECT PI, NGĂN BÙNG NỔ TỔ HỢP)
+  op runILPHyp : TermList TermList Hypothesis TermList LogicArgList -> Hypothesis .
+  eq runILPHyp(POS, NEG, BK-Hyp, MR, ExtraVocab) = 
+     $runILP(POS, NEG, BK-Hyp, MR, 
+             removeDup(extractVocabTL(POS) @ extractVocabHyp(BK-Hyp) @ ExtraVocab),
+             removeDup(extractVocabTL(POS))) .
+
+  op $runILP : TermList TermList Hypothesis TermList LogicArgList LogicArgList -> Hypothesis .
+  eq $runILP(POS, NEG, BK-Data, MR, Vocab, Learnable) = 
+     greedyCover(toBody(POS), toBody(NEG), BK-Data, emptyHypothesis, 
+                 buildBase(toMRList(MR), Vocab, Learnable)) .
 endfm

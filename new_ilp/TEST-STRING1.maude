@@ -1,0 +1,23 @@
+load ILP-BRIDGE.maude
+load string1-case.maude
+
+fmod TEST-STRING1 is
+  protecting ILP-BRIDGE .
+  protecting STRING1-CASE .
+  protecting META-LEVEL .
+
+  eq MAX-CLAUSES = 10 .
+  eq MAX-PROOF-DEPTH = 25 .
+
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('STRING1-CASE, false) . 
+  
+  op POS-Data : -> TermList . eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) . 
+  op MR-Data : -> TermList .  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) . 
+
+  op Induced-Program : -> Hypothesis .
+  eq Induced-Program = runILPHyp(POS-Data, empty, emptyHypothesis, MR-Data, ExtraVocab) . 
+endfm
+
+set show timing on .
+reduce in TEST-STRING1 : simulate(Induced-Program) .

@@ -1,0 +1,64 @@
+load ILP-BRIDGE.maude
+load METARULE.maude
+
+fmod STRING1-CASE is
+  protecting ILP-BRIDGE .
+  protecting METARULE .
+  protecting META-LEVEL .
+
+  sorts Val MyList Pair .
+  subsorts Val MyList Pair < Entity .
+
+  ops a b c d : -> Val [ctor] .
+  op empty : -> MyList [ctor] .
+  op _;_ : MyList MyList -> MyList [ctor assoc id: empty prec 60] . 
+  op [_] : MyList -> MyList [ctor] .
+  subsort Val < MyList .
+
+  op _/_ : MyList MyList -> Pair [ctor prec 70] .
+  ops f : Pair Pair -> Pred [ctor] .
+
+  op errPair : -> Pair [ctor] . 
+  op doCopy1 : Pair -> Pair .
+  
+  --- LOGIC CHUẨN: doCopy1 giữ lại chữ cái đầu vào, tiêu thụ chữ cái đầu ra
+  eq doCopy1([ V:Val ; T1:MyList ] / [ V:Val ; T2:MyList ]) = [ V:Val ; T1:MyList ] / [ T2:MyList ] .
+  eq doCopy1(P:Pair) = errPair [owise] . 
+
+  op doSkip1 : Pair -> Pair .
+  eq doSkip1([ V:Val ; T1:MyList ] / Out:MyList) = [ T1:MyList ] / Out:MyList .
+  eq doSkip1(P:Pair) = errPair [owise] . 
+
+  vars K : Nat . vars T T2 : Term .
+
+  eq isDynamic('copy1) = true .
+  ceq evalDynamicEnv('copy1, t(T) @ v(K), E:Env) = bindA(v(K), t(upTerm(doCopy1(downTerm(T, errPair))))) ;; E:Env if doCopy1(downTerm(T, errPair)) =/= errPair .
+  ceq evalDynamicEnv('copy1, t(T) @ t(T2), E:Env) = E:Env if doCopy1(downTerm(T, errPair)) == downTerm(T2, errPair) /\ doCopy1(downTerm(T, errPair)) =/= errPair .
+
+  eq isDynamic('skip1) = true .
+  ceq evalDynamicEnv('skip1, t(T) @ v(K), E:Env) = bindA(v(K), t(upTerm(doSkip1(downTerm(T, errPair))))) ;; E:Env if doSkip1(downTerm(T, errPair)) =/= errPair .
+  ceq evalDynamicEnv('skip1, t(T) @ t(T2), E:Env) = E:Env if doSkip1(downTerm(T, errPair)) == downTerm(T2, errPair) /\ doSkip1(downTerm(T, errPair)) =/= errPair .
+
+  op ExtraVocab : -> LogicArgList .
+  eq ExtraVocab = q('copy1) @ q('skip1) .
+
+  op POS : -> TermList .
+  eq POS = 
+    (f([ a ; b ; c ] / [ a ; a ; b ; b ; c ; c ] , [ empty ] / [ empty ]))
+    (f([ a ; a ; c ] / [ a ; a ; a ; a ; c ; c ] , [ empty ] / [ empty ]))
+    (f([ a ; c ] / [ a ; a ; c ; c ] , [ empty ] / [ empty ])) .
+
+  op NEG : -> TermList .
+  --- Ép kiểu rõ ràng để Maude không bị nhầm lẫn với 'empty' của MyList
+  eq NEG = (empty).TermList .
+
+  op METARULES : -> TermList .
+  vars P Q R : Pred . vars A B C : Pair .
+  eq METARULES =
+    metarule([P | Q | R],     [P : A, B], [Q : A, C] [R : C, B])
+    metarule([P | Q],         [P : A, B], [Q : A, C] [P : C, B])
+    metarule([P | Q],         [P : A, B], [Q : A, B])
+    metarule([P | Q | R],     [P : A, B], [Q : A] [R : A, B])
+    metarule([P | Q | R],     [P : A, B], [Q : A, B] [R : A])
+    metarule([P | Q | R],     [P : A, B], [Q : A, B] [R : A, B]) [nonexec] .
+endfm

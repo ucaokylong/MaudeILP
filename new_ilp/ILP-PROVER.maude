@@ -3,14 +3,21 @@ load ILP-UNIFIER.maude
 fmod ILP-PROVER is
   protecting ILP-UNIFIER .
 
+  --- NÂNG ĐỘ SÂU LÊN 50 ĐỂ ĐỆ QUY CHUỖI DÀI KHÔNG BỊ NGẮT MẠCH
   op MAX-PROOF-DEPTH : -> Nat .
-  eq MAX-PROOF-DEPTH = 5 [owise] .
+  eq MAX-PROOF-DEPTH = 50 [owise] .
 
   vars E E2 : Env . vars ER : EnvResult . vars Q Q2 : Qid .
   vars Args AL AL2 : LogicArgList . vars N K : Nat .
   vars Prog BK Rules : Hypothesis . vars Goal RuleHead Lit : LogicLiteral .
   vars RuleBody Body : LogicBody .
   vars ES : EnvSet . vars Arg : LogicArg . 
+
+  --- CỔNG KẾT NỐI BK ĐỘNG (HOOKS)
+  op isDynamic : Qid -> Bool .
+  eq isDynamic(Q) = false [owise] .
+  op evalDynamicEnv : Qid LogicArgList Env -> EnvResult .
+  eq evalDynamicEnv(Q, AL, E) = failEnv [owise] .
 
   op renameArg : LogicArg Nat -> LogicArg .
   eq renameArg(v(K), N) = v(K + (N * 100)) .
@@ -54,11 +61,13 @@ fmod ILP-PROVER is
 
   eq entails(Prog, BK, Goal, E, 0) = emptyEnvSet .
   eq entailsBody(Prog, BK, Body, E, 0) = emptyEnvSet .
-  eq entails(Prog, BK, Goal, E, s(N)) = tryRules(Prog, BK, BK & Prog, Goal, E, s(N)) .
 
-  eq tryRules(Prog, BK, emptyHypothesis, Goal, E, N) = emptyEnvSet .
-  
-  --- SỬ DỤNG [OWISE] ĐỂ LỌC VỊ TỪ O(1) THAY VÌ IF
+  --- MÓC NỐI: Ưu tiên xử lý BK động
+  ceq entails(Prog, BK, pred(Q, AL), E, s(N)) = ER
+    if isDynamic(Q) /\ ER := evalDynamicEnv(Q, instArgsLogic(AL, E), E) /\ ER =/= failEnv .
+
+  eq entails(Prog, BK, Goal, E, s(N)) = tryRules(Prog, BK, BK & Prog, Goal, E, s(N)) [owise] .
+
   op getRenamedHead : LogicLiteral LogicBody Nat -> LogicLiteral .
   eq getRenamedHead(Lit, emptyBody, N) = Lit .
   eq getRenamedHead(Lit, RuleBody, N) = renameLit(Lit, N) [owise] .
@@ -66,6 +75,8 @@ fmod ILP-PROVER is
   op getRenamedBody : LogicBody Nat -> LogicBody .
   eq getRenamedBody(emptyBody, N) = emptyBody .
   eq getRenamedBody(RuleBody, N) = renameBody(RuleBody, N) [owise] .
+
+  eq tryRules(Prog, BK, emptyHypothesis, Goal, E, N) = emptyEnvSet .
 
   eq tryRules(Prog, BK, (pred(Q, AL2) :- RuleBody) & Rules, pred(Q, AL), E, N) =
      tryRuleSingle(Prog, BK, getRenamedHead(pred(Q, AL2), RuleBody, N), getRenamedBody(RuleBody, N), pred(Q, AL), E, N) 
@@ -75,6 +86,7 @@ fmod ILP-PROVER is
 
   ceq tryRuleSingle(Prog, BK, RuleHead, RuleBody, Goal, E, s(N)) = entailsBody(Prog, BK, RuleBody, ER, N)
     if ER := matchLiteral(Goal, RuleHead, E) /\ ER =/= failEnv .
+
   eq tryRuleSingle(Prog, BK, RuleHead, RuleBody, Goal, E, N) = emptyEnvSet [owise] .
 
   eq entailsBody(Prog, BK, emptyBody, E, N) = E .
