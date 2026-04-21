@@ -1,0 +1,82 @@
+load ILP-SEARCH.maude
+
+fmod STRING1-CASE is
+  protecting ILP-SEARCH .
+
+  --- =======================================================
+  --- 1. KIỂU DỮ LIỆU & TRẠNG THÁI (PAIR)
+  --- =======================================================
+  sorts Val MyList Pair .
+  subsorts Val MyList Pair < Entity .
+
+  ops a b c d : -> Val [ctor] .
+  op empty : -> MyList [ctor] .
+  op _;_ : MyList MyList -> MyList [ctor assoc id: empty prec 60] . 
+  op [_] : MyList -> MyList [ctor] .
+  subsort Val < MyList .
+
+  --- Định nghĩa cặp Input / Output theo phong cách Prolog
+  op _/_ : MyList MyList -> Pair [ctor prec 70] .
+
+  --- =======================================================
+  --- 2. KHAI BÁO VỊ TỪ (Predicates)
+  --- =======================================================
+  ops f : Pair Pair -> Pred [ctor] .
+  ops copy1 skip1 : Pair Pair -> Pred [ctor] .
+
+  --- Bài toán này tìm chuỗi logic biến đổi trạng thái (Pathfinding)
+  eq ibk = 'none .
+
+  --- =======================================================
+  --- 3. BACKGROUND KNOWLEDGE (BK)
+  --- =======================================================
+  eq BK =
+    --- Các bước biến đổi cho chuỗi 'a', 'b', 'c'
+    (copy1([ a ; b ; c ] / [ a ; a ; b ; b ; c ; c ], [ a ; b ; c ] / [ a ; b ; b ; c ; c ]))
+    (copy1([ a ; b ; c ] / [ a ; b ; b ; c ; c ], [ a ; b ; c ] / [ b ; b ; c ; c ]))
+    (skip1([ a ; b ; c ] / [ b ; b ; c ; c ], [ b ; c ] / [ b ; b ; c ; c ]))
+
+    (copy1([ b ; c ] / [ b ; b ; c ; c ], [ b ; c ] / [ b ; c ; c ]))
+    (copy1([ b ; c ] / [ b ; c ; c ], [ b ; c ] / [ c ; c ]))
+    (skip1([ b ; c ] / [ c ; c ], [ c ] / [ c ; c ]))
+
+    (copy1([ c ] / [ c ; c ], [ c ] / [ c ]))
+    (copy1([ c ] / [ c ], [ c ] / empty))
+    (skip1([ c ] / empty, empty / empty))
+
+    --- Ví dụ bổ sung để máy học tính tổng quát
+    (copy1([ a ; a ; c ] / [ a ; a ; a ; a ; c ; c ], [ a ; a ; c ] / [ a ; a ; a ; c ; c ]))
+    (copy1([ a ; a ; c ] / [ a ; a ; a ; c ; c ], [ a ; a ; c ] / [ a ; a ; c ; c ]))
+    (skip1([ a ; a ; c ] / [ a ; a ; c ; c ], [ a ; c ] / [ a ; a ; c ; c ]))
+    nilILP .
+
+  --- =======================================================
+  --- 4. POSITIVE EXAMPLES (POS)
+  --- =======================================================
+  eq POS = 
+    (f([ a ; b ; c ] / [ a ; a ; b ; b ; c ; c ] , empty / empty))
+    (f([ a ; a ; c ] / [ a ; a ; a ; a ; c ; c ] , empty / empty))
+    (f([ a ; c ] / [ a ; a ; c ; c ] , empty / empty)) .
+
+  --- =======================================================
+  --- 5. METARULES
+  --- =======================================================
+  vars P Q R : Pred . vars A B C : Pair .
+  
+  eq METARULES =
+    --- Chain Rule: f(A,B) :- copy1(A,C), inv(C,B)
+    metarule([P | Q | R], [P : A, B], [Q : A, C] [R : C, B])
+    
+    --- Identity Rule: f(A,B) :- skip1(A,B)
+    metarule([P | Q], [P : A, B], [Q : A, B]) [nonexec] .
+
+  --- =======================================================
+  --- 6. META-LEVEL HOOKS (ĐỂ BẢO VỆ CÚ PHÁP [ ] VÀ /)
+  --- =======================================================
+  ---vars H1 H2 T1 T2 : Term .
+  
+  --- Hook này đảm bảo Search Engine hiểu được cấu trúc của Pair Input/Output
+  --- Không cần defineIBK vì ibk = 'none
+  ---eq hasInnerTask(T:Term) = false .
+
+endfm

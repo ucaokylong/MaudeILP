@@ -1,0 +1,41 @@
+load ILP-SEARCH.maude
+load 1d_flip_case.maude
+
+fmod TEST-1D-FLIP is
+  protecting ILP-SEARCH .
+  protecting 1D-FLIP-CASE .
+  protecting META-LEVEL .
+
+  --- Giới hạn độ sâu tìm kiếm cho bài toán 1D Flip
+  eq MAX-DEPTH = 5 .
+
+  --- Trích xuất module Case qua Meta-level
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('1D-FLIP-CASE, false) .
+  
+  --- Lấy danh sách ví dụ tích cực (POS)
+  op POS-Data : -> TermList .
+  eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+  
+  --- Lấy danh sách ví dụ tiêu cực (NEG)
+  op NEG-Data : -> TermList . 
+  eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+  
+  --- Lấy tập dữ liệu nền (BK)
+  op BK-Data : -> TermSet . 
+  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+  
+  --- Lấy danh sách khuôn mẫu (METARULES)
+  op MR-Data : -> TermList . 
+  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+
+  --- Hàm học chương trình
+  op Induced-Program : -> ILPClauseSet .
+  eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptyClauseSet, MR-Data) .
+endfm
+
+--- Bật hiển thị thời gian để đo tốc độ so với Metagol
+set show timing on .
+
+--- Lệnh thực thi: Học và hiển thị kết quả dưới dạng chuỗi String
+reduce in TEST-1D-FLIP : simulate(Induced-Program) .

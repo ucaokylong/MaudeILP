@@ -1,0 +1,236 @@
+load ILP-CORE-ENGINE.maude
+
+fmod ILP-SEARCH is
+  protecting ILP-DISPLAY .
+
+  --- =========================================================================
+  --- CẤU HÌNH HỆ THỐNG
+  --- =========================================================================
+  op MAX-DEPTH : -> Nat .
+  eq MAX-DEPTH = 5 [owise] . 
+
+  vars P A B Fact V1 V2 T T1 T2 T3 NegEx : Term .
+  vars POS NEG MRs TL TL1 TL2 Ctx Prefix Args : TermList .
+  vars TS FullTS : TermSet .
+  vars C C1 C2 : ILPClause . 
+  vars CS CS2 AccCS : ILPClauseSet .
+  vars N Depth MaxD Arity QArity RArity : Nat . 
+  vars F Q R : Qid .
+  vars Rest Pth : Path . 
+  vars PL InnerPL : PathList .
+  vars Srt VStr : String .
+  vars Lit Head : BoundLiteral . 
+  vars Body : BoundBody . vars E : Env .
+
+  --- =========================================================================
+  --- BỘ TRÍCH XUẤT ĐA HÌNH (POLYMORPHIC EXTRACTORS)
+  --- =========================================================================
+  op getLen : TermList -> Nat .
+  eq getLen(empty) = 0 .
+  eq getLen((T, TL)) = s(getLen(TL)) .
+  eq getLen(T) = 1 .
+
+  op getCtxTL : TermList -> TermList .
+  eq getCtxTL((Ctx, A, B)) = Ctx .
+  eq getCtxTL((A, B)) = empty .
+  eq getCtxTL(T) = empty [owise] .
+
+  op getInTL : TermList -> Term .
+  eq getInTL((Ctx, A, B)) = A .
+  eq getInTL((A, B)) = A .
+  eq getInTL(T) = T [owise] .
+
+  op getOutTL : TermList -> Term .
+  eq getOutTL((Ctx, A, B)) = B .
+  eq getOutTL((A, B)) = B .
+  eq getOutTL(T) = T [owise] .
+
+  op getPayload : Term -> TermList .
+  eq getPayload(F[V1, V2, TL]) = TL .
+  eq getPayload(T) = empty [owise] .
+
+  op extractSort : Term -> String . eq extractSort(T) = "Entity" . 
+  op buildVar : String String -> Term . eq buildVar(VStr, Srt) = qid(VStr + ":" + Srt) .
+  op buildInvName : Nat -> Qid . eq buildInvName(N) = qid("inv" + string(N, 10) + ".Pred") .
+  op getArgs : Term -> TermList . eq getArgs(F[TL]) = TL . eq getArgs(T) = empty [owise] .
+
+  op removeLast : TermList -> TermList .
+  eq removeLast((T, TL)) = if TL == empty then empty else (T, removeLast(TL)) fi .
+  eq removeLast(T) = empty .
+  eq removeLast(empty) = empty .
+
+  op getFactArgs : Term -> TermList .
+  ceq getFactArgs(Fact) = removeLast(getArgs(Fact)) if getPayload(Fact) =/= empty .
+  eq getFactArgs(Fact) = getArgs(Fact) [owise] .
+
+  op getFactIn : Term -> Term . eq getFactIn(Fact) = getInTL(getFactArgs(Fact)) .
+  op getFactOut : Term -> Term . eq getFactOut(Fact) = getOutTL(getFactArgs(Fact)) .
+  op getFactCtx : Term -> TermList . eq getFactCtx(Fact) = getCtxTL(getFactArgs(Fact)) .
+  op getFactArity : Term -> Nat . eq getFactArity(Fact) = getLen(getFactArgs(Fact)) .
+
+  op isList : Term -> Bool .
+  eq isList('`[_`][T]) = true . eq isList(T) = false [owise] .
+  
+  op getHeadVal : Term -> Term .
+  eq getHeadVal('`[_`]['_;_[T1, T2]]) = T1 . 
+  eq getHeadVal('`[_`][T1]) = T1 . 
+  eq getHeadVal(T) = T [owise] .
+
+  op matchCtx : TermList TermList -> Bool .
+  eq matchCtx(Ctx, Ctx) = true .
+  eq matchCtx(empty, Ctx) = true .
+  eq matchCtx(Ctx1:TermList, Ctx2:TermList) = false [owise] .
+
+  --- =========================================================================
+  --- ĐÁNH GIÁ ĐỘ BAO PHỦ
+  --- =========================================================================
+  op isCovered : Term ILPClauseSet TermSet -> Bool .
+  eq isCovered(P, CS, TS) = (P \in TS) or solveRecursive(P, CS, TS) .
+  
+  op solveRecursive : Term ILPClauseSet TermSet -> Bool .
+  eq solveRecursive(P, emptyClauseSet, TS) = false .
+  ceq solveRecursive(P, (Head :- Body) ++ CS, TS) = 
+      checkBoundBody(Body, E, TS, TS) or solveRecursive(P, CS, TS)
+      if E := matchBoundLiteral(Head, P, emptyEnv) /\ E =/= emptyEnv .
+  eq solveRecursive(P, CS, TS) = false [owise] .
+
+  --- =========================================================================
+  --- TÌM KIẾM ĐƯỜNG ĐI ĐA HÌNH
+  --- =========================================================================
+  sort Path PathList . 
+  subsort Path < PathList . 
+  op end : Qid Nat TermList -> Path [ctor] .
+  op step : Qid Nat TermList Path -> Path [ctor] .
+  op emptyPL : -> PathList [ctor] .
+  op _||_ : PathList PathList -> PathList [ctor assoc comm id: emptyPL] .
+  
+  op findPath : TermList Term Term TermSet TermSet Nat -> PathList .
+  
+  ceq findPath(Ctx, A, B, Fact U TS, FullTS, 1) = 
+      end(func(Fact), getFactArity(Fact), getPayload(Fact)) || findPath(Ctx, A, B, TS, FullTS, 1)
+      if (getFactIn(Fact) == A) and (getFactOut(Fact) == B) 
+      and matchCtx(getFactCtx(Fact), Ctx) .
+
+  ceq findPath(Ctx, A, B, Fact U TS, FullTS, s(s(N))) = 
+      attach(func(Fact), getFactArity(Fact), getPayload(Fact), findPath(Ctx, getFactOut(Fact), B, FullTS, FullTS, s(N))) 
+      || findPath(Ctx, A, B, TS, FullTS, s(s(N)))
+      if (getFactIn(Fact) == A) 
+      and matchCtx(getFactCtx(Fact), Ctx) .
+      
+  eq findPath(Ctx, A, B, TS, FullTS, N) = emptyPL [owise] .
+  
+  op attach : Qid Nat TermList PathList -> PathList . 
+  eq attach(Q, Arity, TL, Pth || PL) = step(Q, Arity, TL, Pth) || attach(Q, Arity, TL, PL) . 
+  eq attach(Q, Arity, TL, emptyPL) = emptyPL .
+
+  --- =========================================================================
+  --- SINH LUẬT TỰ ĐỘNG (GENERIC CHUNKING)
+  --- =========================================================================
+  op buildLit : Qid Nat TermList Term Term TermList -> BoundLiteral .
+  eq buildLit(Q, 2, Prefix, A, B, TL) = if TL == empty then Q << A, B >> else Q << A, B, TL >> fi .
+  eq buildLit(Q, Arity, Prefix, A, B, TL) = if TL == empty then Q << Prefix, A, B >> else Q << Prefix, A, B, TL >> fi [owise] .
+
+  op wrapPayload : Qid Nat TermList Nat TermList Term Term -> BoundLiteral .
+  eq wrapPayload(Q, Arity, empty, N, Prefix, A, B) = buildLit(Q, Arity, Prefix, A, B, empty) .
+  eq wrapPayload(Q, Arity, TL, N, Prefix, A, B) = buildLit(buildInvName(N), getLen(Prefix) + 2, Prefix, A, B, empty) [owise] .
+
+  op chunkPath : Qid Nat Path Nat String TermList -> ILPClauseSet .
+  
+  eq chunkPath(F, Arity, end(R, RArity, TL2), N, Srt, Prefix) = 
+      (buildLit(F, Arity, Prefix, buildVar("A", Srt), buildVar("B", Srt), empty) :- 
+       wrapPayload(R, RArity, TL2, N, Prefix, buildVar("A", Srt), buildVar("B", Srt))) .
+
+  eq chunkPath(F, Arity, step(Q, QArity, empty, Rest), N, Srt, Prefix) = 
+      (buildLit(F, Arity, Prefix, buildVar("A", Srt), buildVar("B", Srt), empty) :- 
+       buildLit(Q, QArity, Prefix, buildVar("A", Srt), buildVar("C", Srt), empty) & 
+       buildLit(buildInvName(N), getLen(Prefix) + 2, Prefix, buildVar("C", Srt), buildVar("B", Srt), empty)) 
+      ++ chunkPath(buildInvName(N), getLen(Prefix) + 2, Rest, s(N), Srt, Prefix) .
+
+  ceq chunkPath(F, Arity, step(Q, QArity, TL1, end(R, RArity, TL2)), N, Srt, Prefix) = 
+      (buildLit(F, Arity, Prefix, buildVar("A", Srt), buildVar("B", Srt), empty) :- 
+       buildLit(buildInvName(N), getLen(Prefix) + 2, Prefix, buildVar("A", Srt), buildVar("C", Srt), empty) & 
+       wrapPayload(R, RArity, TL2, s(N), Prefix, buildVar("C", Srt), buildVar("B", Srt)))
+      ++ (buildLit(buildInvName(N), getLen(Prefix) + 2, Prefix, buildVar("A", Srt), buildVar("B", Srt), empty) :- 
+          buildLit(Q, QArity, Prefix, buildVar("A", Srt), buildVar("B", Srt), TL1))
+      if TL1 =/= empty .
+
+  ceq chunkPath(F, Arity, step(Q, QArity, TL1, step(R, RArity, TL2, Rest)), N, Srt, Prefix) = 
+      (buildLit(F, Arity, Prefix, buildVar("A", Srt), buildVar("B", Srt), empty) :- 
+       buildLit(buildInvName(N), getLen(Prefix) + 2, Prefix, buildVar("A", Srt), buildVar("C", Srt), empty) & 
+       buildLit(buildInvName(s(N)), getLen(Prefix) + 2, Prefix, buildVar("C", Srt), buildVar("B", Srt), empty))
+      ++ (buildLit(buildInvName(N), getLen(Prefix) + 2, Prefix, buildVar("A", Srt), buildVar("B", Srt), empty) :- 
+          buildLit(Q, QArity, Prefix, buildVar("A", Srt), buildVar("B", Srt), TL1))
+      ++ chunkPath(buildInvName(s(N)), getLen(Prefix) + 2, step(R, RArity, TL2, Rest), s(s(N)), Srt, Prefix) 
+      if TL1 =/= empty .
+
+  --- =========================================================================
+  --- ĐIỀU KHIỂN VÒNG LẶP HỌC
+  --- =========================================================================
+  op learn : TermList TermList TermSet ILPClauseSet TermList -> ILPClauseSet .
+  eq learn(empty, NEG, TS, CS, MRs) = simplifyCS(CS) .
+  ceq learn((P, POS), NEG, TS, CS, MRs) = learn(POS, NEG, TS, CS, MRs) if isCovered(P, CS, TS) .
+  ceq learn((P, POS), NEG, TS, CS, MRs) =
+      learn(POS, NEG, TS, CS ++ CS2, MRs)
+      if not isCovered(P, CS, TS)
+      /\ CS2 := $induceNewRule(P, POS, NEG, TS, CS, MRs, filterCandidates(applyAllMetarules(MRs, P, TS), NEG, TS)) .
+
+  op $induceNewRule : Term TermList TermList TermSet ILPClauseSet TermList ILPClauseSet -> ILPClauseSet .
+  eq $induceNewRule(P, POS, NEG, TS, CS, MRs, emptyClauseSet) = 
+     $fallbackPI(P, POS, NEG, TS, CS, MRs, 
+       searchPI(func(P), getFactCtx(P), getFactIn(P), getFactOut(P), TS, 2, MAX-DEPTH)) .
+  eq $induceNewRule(P, POS, NEG, TS, CS, MRs, C) = C [owise] .
+
+  op searchPI : Qid TermList Term Term TermSet Nat Nat -> PathList .
+  eq searchPI(F, Ctx, A, B, TS, Depth, MaxD) = 
+     if Depth > MaxD then emptyPL 
+     else $evalPI(F, Ctx, A, B, TS, Depth, MaxD, findPath(Ctx, A, B, TS, TS, Depth)) fi .
+
+  op $evalPI : Qid TermList Term Term TermSet Nat Nat PathList -> PathList .
+  eq $evalPI(F, Ctx, A, B, TS, Depth, MaxD, emptyPL) = searchPI(F, Ctx, A, B, TS, Depth + 1, MaxD) .
+  eq $evalPI(F, Ctx, A, B, TS, Depth, MaxD, PL) = PL [owise] .
+
+  --- =========================================================================
+  --- ĐIỀU HƯỚNG TỰ ĐỘNG (ĐÃ FIX GETHEADVAL)
+  --- =========================================================================
+  op buildPrefix : Term String -> TermList .
+  eq buildPrefix(P, Srt) = if getFactCtx(P) == empty then empty else buildVar("Ex", Srt) fi .
+
+  op $fallbackPI : Term TermList TermList TermSet ILPClauseSet TermList PathList -> ILPClauseSet .
+  eq $fallbackPI(P, POS, NEG, TS, CS, MRs, Pth || PL) = 
+     chunkPath(func(P), getFactArity(P), Pth, 1, extractSort(getFactIn(P)), buildPrefix(P, extractSort(getFactIn(P)))) .
+     
+  eq $fallbackPI(P, POS, NEG, TS, CS, MRs, emptyPL) = 
+     if isList(getFactIn(P)) and (ibk =/= 'none)
+     then $handleInnerPI(P, POS, NEG, TS, CS, MRs, 
+       --- [FIXED] getHeadVal(getFactOut(P)) ĐÃ ĐƯỢC THÊM VÀO ĐÂY
+       searchPI(buildInvName(1), empty, getHeadVal(getFactIn(P)), getHeadVal(getFactOut(P)), TS, 2, MAX-DEPTH))
+     else emptyClauseSet fi .
+
+  op $handleInnerPI : Term TermList TermList TermSet ILPClauseSet TermList PathList -> ILPClauseSet .
+  eq $handleInnerPI(P, POS, NEG, TS, CS, MRs, Pth || PL) = 
+     ( buildLit(func(P), getFactArity(P), buildPrefix(P, extractSort(getFactIn(P))), buildVar("A", extractSort(getFactIn(P))), buildVar("B", extractSort(getFactOut(P))), empty)
+       :- buildLit(ibk, getFactArity(P) + 1, buildPrefix(P, extractSort(getFactIn(P))), buildVar("A", extractSort(getFactIn(P))), buildVar("B", extractSort(getFactOut(P))), buildInvName(1)) )
+     ++ chunkPath(buildInvName(1), 2, Pth, 2, extractSort(getHeadVal(getFactIn(P))), empty) . 
+  eq $handleInnerPI(P, POS, NEG, TS, CS, MRs, emptyPL) = emptyClauseSet .
+
+  --- =========================================================================
+  --- BỘ LỌC NEGATIVE
+  --- =========================================================================
+  op coversAnyNEG : ILPClause TermList TermSet -> Bool .
+  eq coversAnyNEG(C, empty, TS) = false .
+  ceq coversAnyNEG(C, (NegEx, NEG), TS) = true if isCovered(NegEx, C, TS) .
+  eq coversAnyNEG(C, (NegEx, NEG), TS) = coversAnyNEG(C, NEG, TS) [owise] .
+
+  op filterCandidates : ILPClauseSet TermList TermSet -> ILPClauseSet . 
+  eq filterCandidates(CS, empty, TS) = CS .
+  eq filterCandidates(emptyClauseSet, NEG, TS) = emptyClauseSet .
+  ceq filterCandidates(C ++ CS, NEG, TS) = filterCandidates(CS, NEG, TS) if coversAnyNEG(C, NEG, TS) .
+  eq filterCandidates(C ++ CS, NEG, TS) = C ++ filterCandidates(CS, NEG, TS) [owise] .
+
+  op simplifyCS : ILPClauseSet -> ILPClauseSet .
+  op $simplify : ILPClauseSet ILPClauseSet -> ILPClauseSet .
+  eq simplifyCS(CS) = $simplify(CS, emptyClauseSet) .
+  eq $simplify(emptyClauseSet, AccCS) = AccCS .
+  ceq $simplify(C1 ++ CS, C2 ++ AccCS) = $simplify(CS, C2 ++ AccCS) if C1 == C2 .
+  eq $simplify(C1 ++ CS, AccCS) = $simplify(CS, AccCS ++ C1) [owise] .
+endfm

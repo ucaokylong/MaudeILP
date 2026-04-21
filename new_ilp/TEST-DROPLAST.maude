@@ -1,0 +1,38 @@
+load ILP-BRIDGE.maude
+load droplast-case.maude
+
+fmod TEST-DROP-LAST is
+  protecting ILP-BRIDGE .
+  protecting MAP-DROPLAST-CASE .
+  protecting META-LEVEL .
+
+  --- Tăng giới hạn để xử lý các cấu trúc đệ quy/ánh xạ phức tạp
+  eq MAX-CLAUSES = 3 .
+  eq MAX-PROOF-DEPTH = 10 .
+
+  --- Override evalDynamic để kết nối với evalBK trong case-study [cite: 18-20]
+  vars Q : Qid . vars AL : LogicArgList . vars T : Term .
+  ceq evalDynamic(Q, AL) = upTerm(evalBK(Q, upTerm(AL))) 
+    if Q == 'mReverse or Q == 'mTail .
+
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('MAP-DROPLAST-CASE, false) . 
+  
+  op POS-Data : -> TermList .
+  eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) . 
+  
+  op NEG-Data : -> TermList . 
+  eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+  
+  op BK-Data : -> TermSet . 
+  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) . 
+
+  op MR-Data : -> TermList .
+  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) . 
+
+  op Induced-Program : -> Hypothesis .
+  eq Induced-Program = runILP(POS-Data, NEG-Data, BK-Data, MR-Data) . 
+endfm
+
+set show timing on .
+reduce in TEST-DROP-LAST : simulate(Induced-Program) . 

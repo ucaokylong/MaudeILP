@@ -3,109 +3,156 @@ load ILP-CORE-ENGINE.maude
 fmod ILP-SEARCH is
   protecting ILP-DISPLAY .
 
+  --- MAX-DEPTH ở đây chính là max_clauses trong Metagol
   op MAX-DEPTH : -> Nat .
   eq MAX-DEPTH = 5 [owise] . 
 
-  vars P A B Fact V1 V2 T T1 T2 : Term .
+  --- KHAI BÁO BIẾN CÔNG KHAI ĐỂ TRÁNH LỖI "BAD TOKEN"
+  vars P P1 P2 A B Fact V1 V2 T T1 T2 NegEx : Term .
   vars POS NEG MRs TL TL1 TL2 : TermList .
   vars TS FullTS : TermSet .
-  vars C C1 C2 : ILPClause . vars CS CS2 AccCS : ILPClauseSet .
-  vars N Depth MaxD : Nat . 
+  vars C C1 C2 : ILPClause .
+  vars CS CS2 AccCS Candidates Prog : ILPClauseSet .
+  vars N Depth MaxN : Nat .
   vars F Q R : Qid .
-  vars Rest Pth : Path . vars PL InnerPL : PathList .
-  vars Srt VStr : String .
-  vars Lit Head : BoundLiteral . vars Body : BoundBody . vars E : Env .
+  vars E E2 : Env . vars E? : Env? . vars ES : EnvSet .
+  vars Body RestB : BoundBody . vars H : BoundLiteral .
+  vars Args : TermList . vars InV OutV HOut : Term .
 
-  op isCovered : Term ILPClauseSet TermSet -> Bool .
-  eq isCovered(P, CS, TS) = (P \in TS) or solveRecursive(P, CS, TS) .
-  op solveRecursive : Term ILPClauseSet TermSet -> Bool .
-  eq solveRecursive(P, emptyClauseSet, TS) = false .
-  ceq solveRecursive(P, (Head :- Body) ++ CS, TS) = 
-      checkBoundBody(Body, E, TS, TS) or solveRecursive(P, CS, TS)
-      if E := matchBoundLiteral(Head, P, emptyEnv) /\ E =/= emptyEnv .
-  eq solveRecursive(P, CS, TS) = false [owise] .
+  --- =========================================================================
+  --- 1. VOCABULARY GENERATION (invented_symbols/3)
+  --- =========================================================================
+  sort VocabList .
+  subsort Qid < VocabList .
+  op emptyVocab : -> VocabList [ctor] .
+  op _;;_ : VocabList VocabList -> VocabList [ctor assoc id: emptyVocab] .
 
+  var VL VL2 : VocabList . --- KHAI BÁO BIẾN VL
+
+  op insertUnique : Qid VocabList -> VocabList .
+  eq insertUnique(Q, emptyVocab) = Q .
+  eq insertUnique(Q, (Q ;; VL)) = (Q ;; VL) .
+  eq insertUnique(Q, (Q2:Qid ;; VL)) = Q2:Qid ;; insertUnique(Q, VL) [owise] .
+
+  op getVocab : TermSet -> VocabList .
+  eq getVocab(emptyTS) = emptyVocab .
+  eq getVocab(Fact U TS) = insertUnique(func(Fact), getVocab(TS)) .
+
+  op combineVocab : VocabList VocabList -> VocabList .
+  eq combineVocab(emptyVocab, VL) = VL .
+  eq combineVocab((Q ;; VL), VL2) = insertUnique(Q, combineVocab(VL, VL2)) .
+
+  op genInvNames : Nat -> VocabList .
+  eq genInvNames(0) = emptyVocab .
+  eq genInvNames(s(N)) = qid("inv" + string(s(N), 10)) ;; genInvNames(N) .
+
+  op getTargetPred : TermList -> Qid .
+  eq getTargetPred((T, TL)) = func(T) . eq getTargetPred(T) = func(T) .
+  eq getTargetPred(empty) = 'nil .
+
+  op DYNAMIC-OPS : -> VocabList .
+  eq DYNAMIC-OPS = emptyVocab [owise] .
+
+  --- =========================================================================
+  --- 2. CANDIDATE GENERATION (Signature based)
+  --- =========================================================================
+  op generateCandidatesForPred : TermList VocabList Qid -> ILPClauseSet .
+  eq generateCandidatesForPred(empty, VL, Q) = emptyClauseSet .
+  eq generateCandidatesForPred((T, TL1), VL, Q) =
+     instantiateMR(T, genEnvs($remove(getHeadSOV(T), getSOVs(T)), VL, bindVar(getHeadSOV(T), Q, emptyEnv)))
+     ++ generateCandidatesForPred(TL1, VL, Q) .
+
+  op getSOVs : Term -> TermList .
+  eq getSOVs('metarule[SOVs:Term, Head:Term, Body:Term]) = extractSOVs(SOVs:Term) .
+  op getHeadSOV : Term -> Term .
+  eq getHeadSOV('metarule[SOVs:Term, '`[_:_`][SOV:Term, FOVs:Term], Body:Term]) = SOV:Term .
+  op $remove : Term TermList -> TermList .
+  eq $remove(T, empty) = empty . eq $remove(T, (T, TL)) = $remove(T, TL) .
+  eq $remove(T, (T2:Term, TL)) = T2:Term , $remove(T, TL) [owise] .
+  op genEnvs : TermList VocabList Env -> EnvSet .
+  eq genEnvs(empty, VL, E) = E .
+  eq genEnvs((T, TL1), VL, E) = $genEnvsForVar(T, VL, TL1, VL, E) .
+  op $genEnvsForVar : Term VocabList TermList VocabList Env -> EnvSet .
+  eq $genEnvsForVar(V1, emptyVocab, TL1, VL, E) = emptyEnvSet .
+  eq $genEnvsForVar(V1, (Q ;; VL), TL1, VL2, E) =
+     genEnvs(TL1, VL2, bindVar(V1, Q, E)) ++ $genEnvsForVar(V1, VL, TL1, VL2, E) .
+
+  --- =========================================================================
+  --- 3. SLD RESOLUTION (Top-down proof)
+  --- =========================================================================
+  op evalMILBody : BoundBody Env? ILPClauseSet TermSet Nat -> EnvSet .
+  eq evalMILBody(Body, failEnv, CS, TS, N) = emptyEnvSet .
+  eq evalMILBody(emptyBB, E, CS, TS, N) = E .
+  eq evalMILBody(Body, E, CS, TS, 0) = emptyEnvSet .
+
+  eq evalMILBody(Q << Args >> & RestB, E, CS, TS, s(N)) =
+     if evalBK(Q, getTerm(getVar($getStart(Args), E))) =/= 'nil.Term
+     then evalMILBody(RestB, bindVar($getEnd(Args), evalBK(Q, getTerm(getVar($getStart(Args), E))), E), CS, TS, s(N))
+     else $evalMILWithClause(Q, Args, RestB, E, CS, CS, TS, s(N)) ++ $evalMILWithFact(Q, Args, RestB, E, CS, TS, TS, s(N)) fi .
+
+  op $evalMILWithClause : Qid TermList BoundBody Env ILPClauseSet ILPClauseSet TermSet Nat -> EnvSet .
+  eq $evalMILWithClause(Q, Args, RestB, E, emptyClauseSet, CS, TS, s(N)) = emptyEnvSet .
+  eq $evalMILWithClause(Q, Args, RestB, E, (H :- Body) ++ CS2, CS, TS, s(N)) =
+      (if getFunc(H) == Q 
+       then $continueMIL(RestB, $getEnd(Args), E, evalMILBody(Body, bindVar(getInV(H), getTerm(getVar($getStart(Args), E)), emptyEnv), CS, TS, N), getOutV(H), CS, TS, s(N))
+       else emptyEnvSet fi)
+      ++ $evalMILWithClause(Q, Args, RestB, E, CS2, CS, TS, s(N)) .
+
+  op $continueMIL : BoundBody Term Env EnvSet Term ILPClauseSet TermSet Nat -> EnvSet .
+  eq $continueMIL(RestB, OutV, E, emptyEnvSet, HOut, CS, TS, N) = emptyEnvSet .
+  eq $continueMIL(RestB, OutV, E, E2 ++ ES, HOut, CS, TS, N) =
+     evalMILBody(RestB, bindVar(OutV, getTerm(getVar(HOut, E2)), E), CS, TS, N) ++
+     $continueMIL(RestB, OutV, E, ES, HOut, CS, TS, N) .
+
+  op $evalMILWithFact : Qid TermList BoundBody Env ILPClauseSet TermSet TermSet Nat -> EnvSet .
+  eq $evalMILWithFact(Q, Args, RestB, E, CS, emptyTS, FullTS, N) = emptyEnvSet .
+  eq $evalMILWithFact(Q, Args, RestB, E, CS, Fact U TS, FullTS, N) =
+      evalMILBody(RestB, matchBoundLiteral(Q << Args >>, Fact, E), CS, FullTS, N) ++
+      $evalMILWithFact(Q, Args, RestB, E, CS, TS, FullTS, N) .
+
+  --- =========================================================================
+  --- 4. SOLVER & ITERATIVE DEEPENING
+  --- =========================================================================
   op learn : TermList TermList TermSet ILPClauseSet TermList -> ILPClauseSet .
-  eq learn(empty, NEG, TS, CS, MRs) = simplifyCS(CS) .
-  ceq learn((P, POS), NEG, TS, CS, MRs) = learn(POS, NEG, TS, CS, MRs) if isCovered(P, CS, TS) .
-  ceq learn((P, POS), NEG, TS, CS, MRs) =
-      learn(POS, NEG, TS, CS ++ CS2, MRs)
-      if not isCovered(P, CS, TS)
-      /\ CS2 := $induceNewRule(P, empty, NEG, TS, CS, MRs, filterCandidates(applyAllMetarules(MRs, P, TS), NEG, TS)) .
+  eq learn(POS, NEG, TS, CS, MRs) = $iterateMIL(POS, NEG, TS, MRs, 1, MAX-DEPTH) .
 
-  op extractSort : Term -> String . eq extractSort(T) = "Entity" . 
-  op buildVar : String String -> Term . eq buildVar(VStr, Srt) = qid(VStr + ":" + Srt) .
-  op getPayload : Term -> TermList .
-  eq getPayload(F[V1, V2, TL]) = TL . eq getPayload(T) = empty [owise] .
+  op $iterateMIL : TermList TermList TermSet TermList Nat Nat -> ILPClauseSet .
+  eq $iterateMIL(POS, NEG, TS, MRs, N, MaxN) = 
+     if N > MaxN then emptyClauseSet else
+     (if $solveAtDepth(POS, NEG, TS, MRs, N) =/= emptyClauseSet 
+      then $solveAtDepth(POS, NEG, TS, MRs, N)
+      else $iterateMIL(POS, NEG, TS, MRs, s(N), MaxN) fi) fi .
 
-  sort Path PathList . subsort Path < PathList . 
-  op end : Qid TermList -> Path [ctor] .
-  op step : Qid TermList Path -> Path [ctor] .
-  op emptyPL : -> PathList [ctor] .
-  op _||_ : PathList PathList -> PathList [ctor assoc comm id: emptyPL] .
+  op $solveAtDepth : TermList TermList TermSet TermList Nat -> ILPClauseSet .
+  eq $solveAtDepth(POS, NEG, TS, MRs, N) = 
+     $backtrackMIL(POS, NEG, TS, $allCandidates(MRs, combineVocab(genInvNames(N), combineVocab(getTargetPred(POS) ;; DYNAMIC-OPS, getVocab(TS))), POS, N), emptyClauseSet) .
 
-  op findPath : Term Term TermSet TermSet Nat -> PathList .
-  ceq findPath(A, B, Fact U TS, FullTS, 1) = end(func(Fact), getPayload(Fact)) || findPath(A, B, TS, FullTS, 1) if (arg1(Fact) == A) and (arg2(Fact) == B) .
-  ceq findPath(A, B, Fact U TS, FullTS, s(s(N))) = attach(func(Fact), getPayload(Fact), findPath(arg2(Fact), B, FullTS, FullTS, s(N))) || findPath(A, B, TS, FullTS, s(s(N))) if (arg1(Fact) == A) .
-  eq findPath(A, B, TS, FullTS, N) = emptyPL [owise] .
+  op $allCandidates : TermList VocabList TermList Nat -> ILPClauseSet .
+  eq $allCandidates(MRs, VL, POS, 0) = emptyClauseSet .
+  eq $allCandidates(MRs, VL, POS, s(N)) = 
+     generateCandidatesForPred(MRs, VL, getTargetPred(POS)) ++ $genInvCandidates(MRs, VL, N) .
 
-  op attach : Qid TermList PathList -> PathList . 
-  eq attach(Q, TL, Pth || PL) = step(Q, TL, Pth) || attach(Q, TL, PL) . eq attach(Q, TL, emptyPL) = emptyPL .
+  op $genInvCandidates : TermList VocabList Nat -> ILPClauseSet .
+  eq $genInvCandidates(MRs, VL, 0) = emptyClauseSet .
+  eq $genInvCandidates(MRs, VL, s(N)) = 
+     generateCandidatesForPred(MRs, VL, qid("inv" + string(s(N), 10))) ++ $genInvCandidates(MRs, VL, N) .
 
-  op wrapPayload : Qid TermList Nat Term Term -> BoundLiteral .
-  eq wrapPayload(Q, empty, N, V1, V2) = Q << V1, V2 >> .
-  eq wrapPayload(Q, TL, N, V1, V2) = 'inv1.Pred << V1, V2 >> [owise] .
-  
-  op genInvClause : Qid TermList Nat String -> ILPClauseSet . 
-  eq genInvClause(Q, empty, N, Srt) = emptyClauseSet .
-  eq genInvClause(Q, TL, N, Srt) = ('inv1.Pred << buildVar("A", Srt), buildVar("B", Srt) >> :- Q << buildVar("A", Srt), buildVar("B", Srt), TL >>) .
+  op $backtrackMIL : TermList TermList TermSet ILPClauseSet ILPClauseSet -> ILPClauseSet .
+  eq $backtrackMIL(empty, NEG, TS, Candidates, Prog) = Prog .
+  ceq $backtrackMIL((P, POS), NEG, TS, Candidates, Prog) = $backtrackMIL(POS, NEG, TS, Candidates, Prog) 
+      if coversMIL(P, Prog, TS) .
+  ceq $backtrackMIL((P, POS), NEG, TS, C ++ Candidates, Prog) = $backtrackMIL(POS, NEG, TS, Candidates, Prog ++ C)
+      if not coversMIL(P, Prog, TS) /\ coversMIL(P, Prog ++ C, TS) /\ not coversAnyNEGMIL(NEG, Prog ++ C, TS) .
+  eq $backtrackMIL(POS, NEG, TS, Candidates, Prog) = emptyClauseSet [owise] .
 
-  op chunkPath : Qid Path Nat String -> ILPClauseSet .
-  eq chunkPath(F, step(Q, TL1, end(R, TL2)), N, Srt) = (F << buildVar("A", Srt), buildVar("B", Srt) >> :- wrapPayload(Q, TL1, N, buildVar("A", Srt), buildVar("C", Srt)) & wrapPayload(R, TL2, s(N), buildVar("C", Srt), buildVar("B", Srt))) ++ genInvClause(Q, TL1, N, Srt) ++ genInvClause(R, TL2, s(N), Srt) .
-  eq chunkPath(F, step(Q, TL1, step(R, TL2, Rest)), N, Srt) = (F << buildVar("A", Srt), buildVar("B", Srt) >> :- wrapPayload(Q, TL1, N, buildVar("A", Srt), buildVar("C", Srt)) & 'invX.Pred << buildVar("C", Srt), buildVar("B", Srt) >>) ++ genInvClause(Q, TL1, N, Srt) ++ chunkPath('invX.Pred, step(R, TL2, Rest), s(N), Srt) .
+  op coversMIL : Term ILPClauseSet TermSet -> Bool .
+  eq coversMIL(P, emptyClauseSet, TS) = false .
+  eq coversMIL(P, CS, TS) = evalMILBody(emptyBB & (func(P) << getArgs(P) >>), emptyEnv, CS, TS, 5) =/= emptyEnvSet .
 
-  op searchPI : Qid Term Term TermSet Nat Nat -> PathList .
-  eq searchPI(F, A, B, TS, Depth, MaxD) = if Depth > MaxD then emptyPL else $evalPI(F, A, B, TS, Depth, MaxD, findPath(A, B, TS, TS, Depth)) fi .
-  op $evalPI : Qid Term Term TermSet Nat Nat PathList -> PathList .
-  eq $evalPI(F, A, B, TS, Depth, MaxD, emptyPL) = searchPI(F, A, B, TS, Depth + 1, MaxD) .
-  eq $evalPI(F, A, B, TS, Depth, MaxD, PL) = PL [owise] .
-
-  op isList : Term -> Bool .
-  eq isList('`[_`][T:Term]) = true . eq isList(T:Term) = false [owise] .
-  op getHeadVal : Term -> Term .
-  eq getHeadVal('`[_`]['_;_[T1:Term, T2:Term]]) = T1:Term . eq getHeadVal('`[_`][T1:Term]) = T1:Term . eq getHeadVal(T:Term) = T:Term [owise] .
-  op filterCandidates : ILPClauseSet TermList TermSet -> ILPClauseSet . eq filterCandidates(CS, NEG, TS) = CS .
-
-  op $induceNewRule : Term TermList TermList TermSet ILPClauseSet TermList ILPClauseSet -> ILPClauseSet .
-  eq $induceNewRule(P, POS, NEG, TS, CS, MRs, emptyClauseSet) = 
-     $fallbackPI(P, POS, NEG, TS, CS, MRs, searchPI(func(P), arg1(P), arg2(P), TS, 2, MAX-DEPTH)) .
-  
-  --- [FIX] Xử lý an toàn khi tham số thứ 7 trả về 1 hoặc nhiều luật (C)
-  eq $induceNewRule(P, POS, NEG, TS, CS, MRs, C) = C [owise] .
-
-  op $fallbackPI : Term TermList TermList TermSet ILPClauseSet TermList PathList -> ILPClauseSet .
-  
-  --- Trả thẳng kết quả Linear
-  eq $fallbackPI(P, POS, NEG, TS, CS, MRs, Pth || PL) = chunkPath(func(P), Pth, 1, extractSort(arg1(P))) .
-  
-  --- IBK Kích hoạt (Dùng biến ibk chuẩn của Metagol)
-  eq $fallbackPI(P, POS, NEG, TS, CS, MRs, emptyPL) = 
-     if isList(arg1(P)) and (ibk =/= 'none)
-     then $handleInnerPI(P, POS, NEG, TS, CS, MRs, searchPI('inv1.Pred, getHeadVal(arg1(P)), getHeadVal(arg2(P)), TS, 2, MAX-DEPTH))
-     else emptyClauseSet fi .
-
-  op $handleInnerPI : Term TermList TermList TermSet ILPClauseSet TermList PathList -> ILPClauseSet .
-  eq $handleInnerPI(P, POS, NEG, TS, CS, MRs, Pth || PL) = 
-     (func(P) << buildVar("A", extractSort(arg1(P))), buildVar("B", extractSort(arg2(P))) >> :- 
-      ibk << buildVar("A", extractSort(arg1(P))), buildVar("B", extractSort(arg2(P))), 'inv1.Pred >>) ++ 
-     chunkPath('inv1.Pred, Pth, 1, extractSort(getHeadVal(arg1(P)))) .
-  
-  eq $handleInnerPI(P, POS, NEG, TS, CS, MRs, emptyPL) = emptyClauseSet .
+  op coversAnyNEGMIL : TermList ILPClauseSet TermSet -> Bool .
+  eq coversAnyNEGMIL(empty, CS, TS) = false .
+  eq coversAnyNEGMIL((NegEx, NEG), CS, TS) = if coversMIL(NegEx, CS, TS) then true else coversAnyNEGMIL(NEG, CS, TS) fi .
 
   op simplifyCS : ILPClauseSet -> ILPClauseSet .
-  op $simplify : ILPClauseSet ILPClauseSet -> ILPClauseSet .
-  eq simplifyCS(CS) = $simplify(CS, emptyClauseSet) .
-  eq $simplify(emptyClauseSet, AccCS) = AccCS .
-  ceq $simplify(C1 ++ CS, C2 ++ AccCS) = $simplify(CS, C2 ++ AccCS) if C1 == C2 .
-  eq $simplify(C1 ++ CS, AccCS) = $simplify(CS, AccCS ++ C1) [owise] .
+  eq simplifyCS(CS) = CS .
 endfm

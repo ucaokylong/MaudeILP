@@ -5,10 +5,10 @@ fmod ILP-EXTRACT is
   protecting META-LEVEL .
   protecting CONVERSION .
 
-  vars T T1 T2 : Term . vars TL TL1 TL2 : TermList . vars M : [Module] .
+  vars T T1 T2 : Term . vars TL TL1 TL2 : TermList . vars M : [Module] . 
   vars Q Q1 Q2 : Qid . vars EqS : EquationSet . vars ODS : OpDeclSet .
   vars TY : Type . vars AS : AttrSet . vars TYL : TypeList .
-  vars N : Nat . vars S : String . vars Cond : Condition .
+  vars N : Nat . vars S : String .
 
   sort ILP-QidSet . subsort Qid < ILP-QidSet .
   op emptySet : -> ILP-QidSet [ctor] .
@@ -45,18 +45,15 @@ fmod ILP-EXTRACT is
   op $getOpsByResult : OpDeclSet Qid -> ILP-QidSet .
   eq getAllPredsSet(M) = $getOpsByResult(getOps(M), 'Pred) .
   eq $getOpsByResult(none, Q2) = emptySet .
-  eq $getOpsByResult((op Q1 : TYL -> TY [AS] .) ODS, Q2) = if (qid(beforeDot(string(TY))) == Q2) then Q1 |
-  $getOpsByResult(ODS, Q2) else $getOpsByResult(ODS, Q2) fi .
+  eq $getOpsByResult((op Q1 : TYL -> TY [AS] .) ODS, Q2) = if (qid(beforeDot(string(TY))) == Q2) then Q1 | $getOpsByResult(ODS, Q2) else $getOpsByResult(ODS, Q2) fi .
 
   op filterSetByArity : ILP-QidSet [Module] Nat -> ILP-QidSet .
   eq filterSetByArity(emptySet, M, N) = emptySet .
-  eq filterSetByArity(Q | QS:ILP-QidSet, M, N) = if getArity(M, Q) == N then Q |
-  filterSetByArity(QS:ILP-QidSet, M, N) else filterSetByArity(QS:ILP-QidSet, M, N) fi .
+  eq filterSetByArity(Q | QS:ILP-QidSet, M, N) = if getArity(M, Q) == N then Q | filterSetByArity(QS:ILP-QidSet, M, N) else filterSetByArity(QS:ILP-QidSet, M, N) fi .
 
   op filterSetByPresence : ILP-QidSet ILP-QidSet -> ILP-QidSet .
   eq filterSetByPresence(emptySet, QS2:ILP-QidSet) = emptySet .
-  eq filterSetByPresence(Q | QS1:ILP-QidSet, QS2:ILP-QidSet) = if isMember(Q, QS2:ILP-QidSet) then Q |
-  filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) else filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) fi .
+  eq filterSetByPresence(Q | QS1:ILP-QidSet, QS2:ILP-QidSet) = if isMember(Q, QS2:ILP-QidSet) then Q | filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) else filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) fi .
   op isMember : Qid ILP-QidSet -> Bool .
   eq isMember(Q, Q | QS:ILP-QidSet) = true . eq isMember(Q1, QS:ILP-QidSet) = false [owise] .
 
@@ -64,8 +61,7 @@ fmod ILP-EXTRACT is
   op $extractEntities : OpDeclSet -> ILP-QidSet .
   eq getEntities(M) = setToTermList($extractEntities(getOps(M)), 'Entity) .
   eq $extractEntities(none) = emptySet .
-  eq $extractEntities((op Q1 : TYL -> TY [AS] .) ODS) = if (TYL == nil) and (qid(beforeDot(string(TY))) =/= 'Pred) then Q1 |
-  $extractEntities(ODS) else $extractEntities(ODS) fi .
+  eq $extractEntities((op Q1 : TYL -> TY [AS] .) ODS) = if (TYL == nil) and (qid(beforeDot(string(TY))) =/= 'Pred) then Q1 | $extractEntities(ODS) else $extractEntities(ODS) fi .
 
   op getTargetPreds : [Module] -> TermList .
   eq getTargetPreds(M) = setToTermList(filterSetByPresence(getAllPredsSet(M), (getPredsInData(flattenList(getEqRhs(M, 'POS))) | getPredsInData(flattenList(getEqRhs(M, 'NEG))))), 'Pred) .
@@ -80,15 +76,9 @@ fmod ILP-EXTRACT is
   eq getFunctor(Q:Qid[TL]) = Q:Qid . eq getFunctor(Q:Qid) = Q:Qid [owise] .
   op getPredsInData : TermList -> ILP-QidSet .
   eq getPredsInData(empty) = emptySet . eq getPredsInData((T, TL)) = getFunctor(T) | getPredsInData(TL) . eq getPredsInData(T) = getFunctor(T) [owise] .
-
   op getEqRhs : [Module] Qid -> Term . eq getEqRhs(M, Q) = $getEqRhs(getEqs(M), Q) .
-  op $getEqRhs : EquationSet Qid -> Term . 
-  eq $getEqRhs((eq T1 = T2 [AS] .) EqS, Q) = if (T1 == Q) or (beforeDot(string(getName(T1))) == string(Q)) then T2 else $getEqRhs(EqS, Q) fi .
-  
-  --- [QUAN TRỌNG] Bỏ qua ceq thay vì crash Parser
-  eq $getEqRhs((ceq T1 = T2 if Cond [AS] .) EqS, Q) = $getEqRhs(EqS, Q) .
+  op $getEqRhs : EquationSet Qid -> Term . eq $getEqRhs((eq T1 = T2 [AS] .) EqS, Q) = if (T1 == Q) or (beforeDot(string(getName(T1))) == string(Q)) then T2 else $getEqRhs(EqS, Q) fi .
   eq $getEqRhs(none, Q) = empty .
-
   op flattenList : Term -> TermList . eq flattenList(empty) = empty .
   eq flattenList(T) = $flatten(T, empty) .
   op $flatten : Term TermList -> TermList .
@@ -96,11 +86,13 @@ fmod ILP-EXTRACT is
   eq $flatten(T, Acc:TermList) = (T, Acc:TermList) [owise] .
   op $flattenTL : TermList TermList -> TermList .
   eq $flattenTL(empty, Acc:TermList) = Acc:TermList . eq $flattenTL((T, TL), Acc:TermList) = $flatten(T, $flattenTL(TL, Acc:TermList)) .
-
+  
   op extractMetarules : Term -> TermList .
   eq extractMetarules('__[TL:TermList]) = TL:TermList .
   eq extractMetarules('nilMR.MetaruleList) = empty .
   eq extractMetarules(T:Term) = T:Term [owise] .
 
   op getMetarules : [Module] -> TermList . eq getMetarules(M) = flattenList(getEqRhs(M, 'METARULES)) .
+  
+ 
 endfm

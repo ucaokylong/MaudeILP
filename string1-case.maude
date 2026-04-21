@@ -1,0 +1,86 @@
+load ILP-SEARCH.maude
+
+fmod STRING1-CASE is
+  protecting ILP-SEARCH .
+  protecting META-LEVEL .
+
+  sorts Val MyList Pair .
+  subsorts Val MyList Pair < Entity .
+
+  ops a b c d : -> Val [ctor] .
+  op empty : -> MyList [ctor] .
+  op _;_ : MyList MyList -> MyList [ctor assoc id: empty prec 60] . 
+  op [_] : MyList -> MyList [ctor] .
+  subsort Val < MyList .
+
+  op _/_ : MyList MyList -> Pair [ctor prec 70] .
+  ops f : Pair Pair -> Pred [ctor] .
+  ops copy1 skip1 : Pair Pair -> Pred [ctor] .
+  eq ibk = 'none .
+
+  --- =======================================================
+  --- INTENSIONAL BK (TÍNH TOÁN ĐỘNG AN TOÀN)
+  --- =======================================================
+  op errPair : -> Pair [ctor] . 
+
+  op doCopy1 : Pair -> Pair .
+  eq doCopy1([ V:Val ; T1:MyList ] / [ V:Val ; T2:MyList ]) = [ V:Val ; T1:MyList ] / [ T2:MyList ] .
+  eq doCopy1(P:Pair) = errPair [owise] . 
+
+  op doSkip1 : Pair -> Pair .
+  eq doSkip1([ V:Val ; T1:MyList ] / Out:MyList) = [ T1:MyList ] / Out:MyList .
+  eq doSkip1(P:Pair) = errPair [owise] . 
+
+  eq BK = nilILP .
+  eq DYNAMIC-OPS = 'copy1 ;; 'skip1 .
+
+  --- =======================================================
+  --- POSITIVE EXAMPLES
+  --- =======================================================
+  eq POS = 
+    (f([ a ; b ; c ] / [ a ; a ; b ; b ; c ; c ] , empty / empty))
+    (f([ a ; a ; c ] / [ a ; a ; a ; a ; c ; c ] , empty / empty))
+    (f([ a ; c ] / [ a ; a ; c ; c ] , empty / empty)) .
+
+  --- =======================================================
+  --- 6 METARULES (Theo đúng chuẩn Metagol)
+  --- =======================================================
+  vars P Q R : Pred . vars A B C : Pair .
+  
+  eq METARULES =
+    --- 1. metarule([P,Q], [P,A,B], [[Q,A,B]]).
+    metarule([P | Q],         [P : A, B], [Q : A, B])
+    
+    --- 2. metarule([P,Q,R], [P,A,B], [[Q,A],[R,A,B]]).
+    metarule([P | Q | R],     [P : A, B], [Q : A] [R : A, B])
+    
+    --- 3. metarule([P,Q,R], [P,A,B], [[Q,A,B],[R,A]]).
+    metarule([P | Q | R],     [P : A, B], [Q : A, B] [R : A])
+    
+    --- 4. metarule([P,Q,R], [P,A,B], [[Q,A,B],[R,A,B]]).
+    metarule([P | Q | R],     [P : A, B], [Q : A, B] [R : A, B])
+    
+    --- 5. metarule([P,Q,R], [P,A,B], [[Q,A,C],[R,C,B]]). (Chain Rule)
+    metarule([P | Q | R],     [P : A, B], [Q : A, C] [R : C, B])
+    
+    --- 6. metarule([P,Q], [P,A,B], [[Q,A,C],[P,C,B]]). (Tail Recursion)
+    metarule([P | Q],         [P : A, B], [Q : A, C] [P : C, B]) [nonexec] .
+
+  --- =======================================================
+  --- HOOKS (AN TOÀN CHO PARSER)
+  --- =======================================================
+  op evalBK : Qid Term -> Term .
+  
+  eq evalBK('copy1, T:Term) = 
+     if doCopy1(downTerm(T:Term, errPair)) =/= errPair 
+     then upTerm(doCopy1(downTerm(T:Term, errPair))) 
+     else 'nil.Term fi .
+     
+  eq evalBK('skip1, T:Term) = 
+     if doSkip1(downTerm(T:Term, errPair)) =/= errPair 
+     then upTerm(doSkip1(downTerm(T:Term, errPair))) 
+     else 'nil.Term fi .
+     
+  eq evalBK(Q:Qid, T:Term) = 'nil.Term [owise] .
+
+endfm

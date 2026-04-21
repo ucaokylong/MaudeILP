@@ -1,0 +1,135 @@
+load ILP-SEARCH.maude
+
+fmod ILP-BRIDGE is
+  protecting ILP-SEARCH .
+  protecting META-LEVEL .
+  protecting CONVERSION .
+
+  sort TermSet .
+  subsort Term < TermSet .
+  op emptyTS : -> TermSet [ctor] .
+  op _U_ : TermSet TermSet -> TermSet [ctor assoc comm idem id: emptyTS] .
+
+  op listToSet : TermList -> TermSet .
+  eq listToSet(empty) = emptyTS .
+  eq listToSet((T:Term , TL:TermList)) = T:Term U listToSet(TL:TermList) .
+  eq listToSet(T:Term) = T:Term U emptyTS .
+
+  op beforeDot : String -> String .
+  ceq beforeDot(S:String) = S:String if find(S:String, ".", 0) == notFound .
+  ceq beforeDot(S:String) = substr(S:String, 0, find(S:String, ".", 0)) if find(S:String, ".", 0) =/= notFound .
+
+  op getName : Term -> Qid .
+  eq getName(C:Constant) = qid(beforeDot(string(C:Constant))) .
+  eq getName(V:Variable) = qid(beforeDot(string(V:Variable))) .
+  eq getName(T:Term) = 'nil [owise] .
+
+  op getFunctor : Term -> Qid .
+  eq getFunctor(Q:Qid[TL:TermList]) = Q:Qid .
+  eq getFunctor(Q:Qid) = Q:Qid [owise] .
+
+  op getEqRhs : [Module] Qid -> Term .
+  eq getEqRhs(M:[Module], Q:Qid) = $getEqRhs(getEqs(M:[Module]), Q:Qid) .
+
+  op $getEqRhs : EquationSet Qid -> Term .
+  ceq $getEqRhs((eq T1:Term = T2:Term [AS:AttrSet] .) EqS:EquationSet, Q:Qid) = T2:Term if (T1:Term == Q:Qid) or (beforeDot(string(getName(T1:Term))) == string(Q:Qid)) .
+  ceq $getEqRhs((eq T1:Term = T2:Term [AS:AttrSet] .) EqS:EquationSet, Q:Qid) = $getEqRhs(EqS:EquationSet, Q:Qid) if (T1:Term =/= Q:Qid) and (beforeDot(string(getName(T1:Term))) =/= string(Q:Qid)) .
+  eq $getEqRhs(none, Q:Qid) = empty .
+
+  op flattenList : Term -> TermList .
+  eq flattenList(empty) = empty .
+  eq flattenList(T:Term) = $flatten(T:Term, empty) .
+
+  op $flatten : Term TermList -> TermList .
+  ceq $flatten(F:Qid[TL:TermList], Acc:TermList) = $flattenTL(TL:TermList, Acc:TermList) if F:Qid == '__ or F:Qid == '_`,_ or F:Qid == 'nil .
+  ceq $flatten(F:Qid[TL:TermList], Acc:TermList) = (F:Qid[TL:TermList], Acc:TermList) if F:Qid =/= '__ and F:Qid =/= '_`,_ and F:Qid =/= 'nil .
+  eq $flatten(T:Term, Acc:TermList) = (T:Term, Acc:TermList) [owise] .
+
+  op $flattenTL : TermList TermList -> TermList .
+  eq $flattenTL(empty, Acc:TermList) = Acc:TermList .
+  eq $flattenTL((T:Term , TL:TermList), Acc:TermList) = $flatten(T:Term, $flattenTL(TL:TermList, Acc:TermList)) .
+
+  vars Q : Qid . vars TL POS NEG MR : TermList . vars T : Term .
+  vars Arg : LogicArg . vars AL Vocab : LogicArgList .
+  vars Lit : LogicLiteral . vars Body POS-Data NEG-Data : LogicBody .
+  vars C : Clause . vars H BK-Data : Hypothesis .
+  var BK : TermSet . var MRs : MetaruleList .
+
+  op showArg : LogicArg -> String .
+  eq showArg(v(N:Nat)) = "V" + string(N:Nat, 10) .
+  eq showArg(q(Q)) = beforeDot(string(Q)) .
+
+  op showAL : LogicArgList -> String .
+  eq showAL(emptyArgList) = "" .
+  eq showAL(Arg) = showArg(Arg) .
+  eq showAL((Arg @ AL)) = showArg(Arg) + "," + showAL(AL) .
+
+  op showLit : LogicLiteral -> String .
+  eq showLit(pred(Q, AL)) = string(Q) + "(" + showAL(AL) + ")" .
+
+  op showBody : LogicBody -> String .
+  eq showBody(emptyBody) = "." .
+  eq showBody(Lit) = showLit(Lit) + " ." .
+  eq showBody(Lit and Body) = showLit(Lit) + ", " + showBody(Body) .
+
+  op showClause : Clause -> String .
+  eq showClause(Lit :- Body) = showLit(Lit) + " :- " + showBody(Body) .
+
+  op simulate : Hypothesis -> String .
+  eq simulate(emptyHypothesis) = "--- [NO SOLUTION FOUND] ---" .
+  eq simulate(C) = showClause(C) . 
+  eq simulate(C & H) = showClause(C) + "\n" + simulate(H) [owise] .
+
+  op toArgs : TermList -> LogicArgList .
+  eq toArgs(empty) = emptyArgList .
+  eq toArgs((T:Term , TL:TermList)) = q(getName(T:Term)) @ toArgs(TL:TermList) .
+  eq toArgs(T:Term) = q(getName(T:Term)) [owise] .
+
+  op termToLiteral : Term -> LogicLiteral .
+  eq termToLiteral(Q:Qid[TL:TermList]) = pred(Q:Qid, toArgs(TL:TermList)) .
+  eq termToLiteral(C:Constant) = pred(getName(C:Constant), emptyArgList) .
+  eq termToLiteral(T:Term) = pred('err, emptyArgList) [owise] .
+
+  op toBody : TermList -> LogicBody .
+  eq toBody(empty) = emptyBody .
+  eq toBody((T:Term , TL:TermList)) = termToLiteral(T:Term) and toBody(TL:TermList) .
+  eq toBody(T:Term) = termToLiteral(T:Term) [owise] .
+
+  op setToHypothesis : TermSet -> Hypothesis .
+  eq setToHypothesis(emptyTS) = emptyHypothesis .
+  eq setToHypothesis(T:Term U TS:TermSet) = (termToLiteral(T:Term) :- emptyBody) & setToHypothesis(TS:TermSet) .
+
+  op extractVocabTL : TermList -> LogicArgList .
+  eq extractVocabTL(empty) = emptyArgList .
+  eq extractVocabTL((T:Term , TL:TermList)) = q(getFunctor(T:Term)) @ extractVocabTL(TL:TermList) .
+  eq extractVocabTL(T:Term) = q(getFunctor(T:Term)) [owise] .
+
+  op extractVocabTS : TermSet -> LogicArgList .
+  eq extractVocabTS(emptyTS) = emptyArgList .
+  eq extractVocabTS(T:Term U TS:TermSet) = q(getFunctor(T:Term)) @ extractVocabTS(TS:TermSet) .
+
+  op removeAll : LogicArg LogicArgList -> LogicArgList .
+  eq removeAll(Arg, emptyArgList) = emptyArgList .
+  eq removeAll(Arg, Arg @ AL) = removeAll(Arg, AL) .
+  eq removeAll(Arg, q(Q) @ AL) = q(Q) @ removeAll(Arg, AL) [owise] .
+
+  op removeDup : LogicArgList -> LogicArgList .
+  eq removeDup(emptyArgList) = emptyArgList .
+  eq removeDup(Arg @ AL) = Arg @ removeDup(removeAll(Arg, AL)) .
+
+  op errMR : -> Metarule [ctor] .
+  op toMRList : TermList -> MetaruleList .
+  eq toMRList(empty) = nilMR .
+  eq toMRList((T:Term , TL:TermList)) = downTerm(T:Term, errMR) toMRList(TL:TermList) .
+  eq toMRList(T:Term) = downTerm(T:Term, errMR) [owise] .
+
+  op injectPI : -> LogicArgList .
+  eq injectPI = q('inv1) @ q('inv2) .
+
+  op runILP : TermList TermList TermSet TermList -> Hypothesis .
+  eq runILP(POS, NEG, BK, MR) = 
+     greedyCover(toBody(POS), toBody(NEG), setToHypothesis(BK), emptyHypothesis, 
+                 buildBase(toMRList(MR), 
+                           removeDup(extractVocabTL(POS) @ extractVocabTS(BK) @ injectPI),
+                           removeDup(extractVocabTL(POS) @ injectPI))) .
+endfm

@@ -1,0 +1,38 @@
+--- ============================================================
+--- ILP-CORE.maude
+--- Hạ tầng tổng hợp cho Framework ILP (Đã Tái Cấu Trúc - Single List)
+--- ============================================================
+
+--- 1. Định nghĩa Kiểu cơ sở chung (Gộp Entity và Pred vào 1 nhà)
+fmod ILP-BASE-ITEM is
+  sorts Entity Pred BaseItem .
+  subsorts Entity Pred < BaseItem .
+endfm
+
+--- 2. Tạo View chung cho cấu trúc List
+view BaseItem from TRIV to ILP-BASE-ITEM is
+  sort Elt to BaseItem .
+endv
+
+--- 3. Khởi tạo DUY NHẤT một danh sách để tránh đụng độ (Tránh Diamond Inheritance)
+fmod ILP-LIST is
+  protecting LIST{BaseItem} * (
+    sort NeList{BaseItem} to NeILPList, 
+    sort List{BaseItem} to ILPList, 
+    op nil to nilILP
+  ) .
+endfm
+
+--- 4. Interface chính cho mọi bài toán ILP
+fmod ILP-CORE is
+  protecting ILP-LIST .
+
+  --- Khai báo BK, POS, NEG giờ dùng kiểu ILPList chung
+  ops BK POS NEG : -> ILPList .
+endfm
+
+
+
+
+
+

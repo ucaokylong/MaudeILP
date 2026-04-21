@@ -1,0 +1,32 @@
+load ILP-BRIDGE.maude
+load grandparent-ilp-new2.maude
+
+fmod TEST-SEARCH is
+  protecting ILP-BRIDGE .
+  protecting GRANDPARENT-ILP-NEW2 .
+  protecting META-LEVEL .
+
+  eq MAX-CLAUSES = 5 .
+  eq MAX-PROOF-DEPTH = 5 .
+
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('GRANDPARENT-ILP-NEW2, false) .
+
+  op POS-Data : -> TermList .
+  eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+
+  op NEG-Data : -> TermList .
+  eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+
+  op BK-Data : -> TermSet .
+  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+
+  op MR-Data : -> TermList .
+  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+
+  op Induced-Program : -> Hypothesis .
+  eq Induced-Program = runILP(POS-Data, NEG-Data, BK-Data, MR-Data) .
+endfm
+
+set show timing on .
+reduce in TEST-SEARCH : simulate(Induced-Program) .

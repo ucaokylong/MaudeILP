@@ -1,0 +1,119 @@
+load ILP-PROVER.maude
+
+fmod ILP-SEARCH is
+  protecting ILP-PROVER .
+
+  op MAX-CLAUSES : -> Nat .
+  eq MAX-CLAUSES = 3 [owise] .
+
+  sort HypothesisSpace .
+  subsort Hypothesis < HypothesisSpace .
+  op emptySpace : -> HypothesisSpace [ctor] .
+  op _||_ : HypothesisSpace HypothesisSpace -> HypothesisSpace [ctor assoc comm idem id: emptySpace] .
+
+  var GlobalH Prog BK-Data C : Hypothesis .
+  var P Goal : LogicLiteral .
+  var Body POS-Data NEG-Data : LogicBody .
+  var Queue BaseSpace : HypothesisSpace .
+  var MRs : MetaruleList . var Vocab Learnable : LogicArgList .
+  var MR : Metarule . var E : Env . var ES : EnvSet .
+  var Depth MaxD : Nat .
+  vars Q R S : Qid . vars AL1 AL2 AL3 : LogicArgList .
+  var Arg : LogicArg .
+
+  op provesAll : Hypothesis Hypothesis LogicBody -> Bool .
+  eq provesAll(Prog, BK-Data, emptyBody) = true .
+  ceq provesAll(Prog, BK-Data, Goal and Body) = true
+    if entails(Prog, BK-Data, Goal, emptyEnv, MAX-PROOF-DEPTH) =/= emptyEnvSet /\ provesAll(Prog, BK-Data, Body) .
+  eq provesAll(Prog, BK-Data, Goal and Body) = false [owise] .
+
+  op provesAny : Hypothesis Hypothesis LogicBody -> Bool .
+  eq provesAny(Prog, BK-Data, emptyBody) = false .
+  ceq provesAny(Prog, BK-Data, Goal and Body) = true
+    if entails(Prog, BK-Data, Goal, emptyEnv, MAX-PROOF-DEPTH) =/= emptyEnvSet .
+  eq provesAny(Prog, BK-Data, Goal and Body) = provesAny(Prog, BK-Data, Body) [owise] .
+
+  op inVocab : Qid LogicArgList -> Bool .
+  eq inVocab(Q, emptyArgList) = false .
+  eq inVocab(Q, q(Q) @ Vocab) = true .
+  eq inVocab(Q, Arg @ Vocab) = inVocab(Q, Vocab) [owise] .
+
+  op isValid : Clause LogicArgList -> Bool .
+  eq isValid(pred(Q, AL1) :- emptyBody, Learnable) = inVocab(Q, Learnable) .
+  eq isValid(pred(Q, AL1) :- pred(R, AL2) and emptyBody, Learnable) = inVocab(Q, Learnable) and (Q =/= R) .
+  eq isValid(pred(Q, AL1) :- pred(R, AL2) and pred(S, AL3) and emptyBody, Learnable) = inVocab(Q, Learnable) and (Q =/= R) and (Q =/= S) .
+  eq isValid(C:Clause, Learnable) = false [owise] .
+
+  op applyEnvs : Metarule EnvSet LogicArgList -> HypothesisSpace .
+  eq applyEnvs(MR, emptyEnvSet, Learnable) = emptySpace .
+  eq applyEnvs(MR, E ||| ES, Learnable) = $applyEnvs(isValid(instantiate(MR, E), Learnable), MR, E, ES, Learnable) .
+
+  op $applyEnvs : Bool Metarule Env EnvSet LogicArgList -> HypothesisSpace .
+  eq $applyEnvs(true, MR, E, ES, Learnable) = instantiate(MR, E) || applyEnvs(MR, ES, Learnable) .
+  eq $applyEnvs(false, MR, E, ES, Learnable) = applyEnvs(MR, ES, Learnable) .
+
+  op getSOVs : Metarule -> SecondOrderVarList .
+  eq getSOVs(metarule(SOVs:SecondOrderVarList, MetaL:MetaLiteral, MetaB:MetaBody)) = SOVs:SecondOrderVarList .
+
+  op buildBase : MetaruleList LogicArgList LogicArgList -> HypothesisSpace .
+  eq buildBase(nilMR, Vocab, Learnable) = emptySpace .
+  eq buildBase(MR MRs, Vocab, Learnable) = applyEnvs(MR, genEnvs(getSOVs(MR), Vocab), Learnable) || buildBase(MRs, Vocab, Learnable) .
+
+  op contains : Hypothesis Clause -> Bool .
+  eq contains(C & Prog, C) = true .
+  eq contains(Prog, C) = false [owise] .
+
+  op crossProduct : HypothesisSpace HypothesisSpace -> HypothesisSpace .
+  eq crossProduct(emptySpace, BaseSpace) = emptySpace .
+  eq crossProduct(Prog || Queue, BaseSpace) = attachAll(Prog, BaseSpace) || crossProduct(Queue, BaseSpace) .
+
+  op attachAll : Hypothesis HypothesisSpace -> HypothesisSpace .
+  eq attachAll(Prog, emptySpace) = emptySpace .
+  eq attachAll(Prog, C || BaseSpace) = $attachAll(contains(Prog, C), Prog, C, BaseSpace) .
+
+  op $attachAll : Bool Hypothesis Clause HypothesisSpace -> HypothesisSpace .
+  eq $attachAll(true, Prog, C, BaseSpace) = attachAll(Prog, BaseSpace) .
+  eq $attachAll(false, Prog, C, BaseSpace) = (Prog & C) || attachAll(Prog, BaseSpace) .
+
+  --- KIỂM TRA ĐIỀU KIỆN 1 LẦN DUY NHẤT BẰNG HÀM PHỤ
+  op checkHypo : Hypothesis LogicLiteral LogicBody Hypothesis -> Bool .
+  eq checkHypo(Prog, P, NEG-Data, BK-Data) = provesAll(Prog, BK-Data, P) and not provesAny(Prog, BK-Data, NEG-Data) .
+
+  op searchInner : HypothesisSpace LogicLiteral LogicBody Hypothesis Hypothesis -> Hypothesis .
+  eq searchInner(emptySpace, P, NEG-Data, BK-Data, GlobalH) = emptyHypothesis .
+  eq searchInner(Prog || Queue, P, NEG-Data, BK-Data, GlobalH) = 
+     $searchInner(checkHypo(GlobalH & Prog, P, NEG-Data, BK-Data), Prog, Queue, P, NEG-Data, BK-Data, GlobalH) .
+
+  op $searchInner : Bool Hypothesis HypothesisSpace LogicLiteral LogicBody Hypothesis Hypothesis -> Hypothesis .
+  eq $searchInner(true, Prog, Queue, P, NEG-Data, BK-Data, GlobalH) = Prog .
+  eq $searchInner(false, Prog, Queue, P, NEG-Data, BK-Data, GlobalH) = searchInner(Queue, P, NEG-Data, BK-Data, GlobalH) .
+
+  op idManager : HypothesisSpace HypothesisSpace LogicLiteral LogicBody Hypothesis Hypothesis Nat Nat -> Hypothesis .
+  eq idManager(Queue, BaseSpace, P, NEG-Data, BK-Data, GlobalH, Depth, MaxD) =
+     $idManager(Depth > MaxD, Queue, BaseSpace, P, NEG-Data, BK-Data, GlobalH, Depth, MaxD) .
+
+  op $idManager : Bool HypothesisSpace HypothesisSpace LogicLiteral LogicBody Hypothesis Hypothesis Nat Nat -> Hypothesis .
+  eq $idManager(true, Queue, BaseSpace, P, NEG-Data, BK-Data, GlobalH, Depth, MaxD) = emptyHypothesis .
+  eq $idManager(false, Queue, BaseSpace, P, NEG-Data, BK-Data, GlobalH, Depth, MaxD) = 
+     $checkLevel(searchInner(Queue, P, NEG-Data, BK-Data, GlobalH), Queue, BaseSpace, P, NEG-Data, BK-Data, GlobalH, Depth, MaxD) .
+
+  op $checkLevel : Hypothesis HypothesisSpace HypothesisSpace LogicLiteral LogicBody Hypothesis Hypothesis Nat Nat -> Hypothesis .
+  eq $checkLevel(emptyHypothesis, Queue, BaseSpace, P, NEG-Data, BK-Data, GlobalH, Depth, MaxD) = 
+     idManager(crossProduct(Queue, BaseSpace), BaseSpace, P, NEG-Data, BK-Data, GlobalH, Depth + 1, MaxD) .
+  eq $checkLevel(Prog, Queue, BaseSpace, P, NEG-Data, BK-Data, GlobalH, Depth, MaxD) = Prog [owise] .
+
+  op greedyCover : LogicBody LogicBody Hypothesis Hypothesis HypothesisSpace -> Hypothesis .
+  eq greedyCover(emptyBody, NEG-Data, BK-Data, GlobalH, BaseSpace) = GlobalH .
+  eq greedyCover(P and POS-Data, NEG-Data, BK-Data, GlobalH, BaseSpace) = 
+     $greedyCover(provesAll(GlobalH, BK-Data, P), P, POS-Data, NEG-Data, BK-Data, GlobalH, BaseSpace) .
+
+  op $greedyCover : Bool LogicLiteral LogicBody LogicBody Hypothesis Hypothesis HypothesisSpace -> Hypothesis .
+  eq $greedyCover(true, P, POS-Data, NEG-Data, BK-Data, GlobalH, BaseSpace) = 
+     greedyCover(POS-Data, NEG-Data, BK-Data, GlobalH, BaseSpace) .
+  eq $greedyCover(false, P, POS-Data, NEG-Data, BK-Data, GlobalH, BaseSpace) = 
+     $checkPatch(idManager(BaseSpace, BaseSpace, P, NEG-Data, BK-Data, GlobalH, 1, MAX-CLAUSES), POS-Data, NEG-Data, BK-Data, GlobalH, BaseSpace) .
+
+  op $checkPatch : Hypothesis LogicBody LogicBody Hypothesis Hypothesis HypothesisSpace -> Hypothesis .
+  eq $checkPatch(emptyHypothesis, POS-Data, NEG-Data, BK-Data, GlobalH, BaseSpace) = emptyHypothesis .
+  eq $checkPatch(Prog, POS-Data, NEG-Data, BK-Data, GlobalH, BaseSpace) = greedyCover(POS-Data, NEG-Data, BK-Data, GlobalH & Prog, BaseSpace) [owise] .
+endfm

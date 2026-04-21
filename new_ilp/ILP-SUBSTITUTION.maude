@@ -1,0 +1,84 @@
+load ILP-HYPOTHESIS.maude
+load METARULE.maude
+
+fmod ILP-SUBSTITUTION is
+  protecting ILP-HYPOTHESIS .
+  protecting METARULE .
+
+  sort Env .
+  op emptyEnv : -> Env [ctor] .
+  op _;;_ : Env Env -> Env [ctor assoc comm id: emptyEnv] .
+  op bindP : SecondOrderVar Qid -> Env [ctor] .
+  op bindA : FirstOrderVar LogicArg -> Env [ctor] .
+
+  vars E E2 : Env . vars P Q : Qid . vars SOV SOV2 : SecondOrderVar .
+  vars FOV : FirstOrderVar . vars Arg : LogicArg .
+  vars MetaArgs FOVs2 : FirstOrderVarList . vars MetaL : MetaLiteral .
+  vars MetaB : MetaBody . vars SOVs : SecondOrderVarList .
+  vars N : Nat .
+
+  op lookupP : SecondOrderVar Env -> Qid .
+  eq lookupP(SOV, bindP(SOV, Q) ;; E) = Q .
+  eq lookupP(SOV, E) = 'errPred [owise] .
+
+  op lookupA : FirstOrderVar Env -> LogicArg .
+  eq lookupA(FOV, bindA(FOV, Arg) ;; E) = Arg .
+  eq lookupA(FOV, bindP(FOV, Q) ;; E) = q(Q) .
+  eq lookupA(FOV, E) = v(999) [owise] .
+
+  op instArgs : FirstOrderVarList Env -> LogicArgList .
+  eq instArgs(FOV, E) = lookupA(FOV, E) .
+  eq instArgs((FOV , MetaArgs), E) = lookupA(FOV, E) @ instArgs(MetaArgs, E) .
+
+  op instLiteral : MetaLiteral Env -> LogicLiteral .
+  eq instLiteral( `[_:_`](SOV, MetaArgs) , E) = pred(lookupP(SOV, E), instArgs(MetaArgs, E)) .
+
+  op instBody : MetaBody Env -> LogicBody .
+  eq instBody(nilMB, E) = emptyBody .
+  eq instBody(MetaL MetaB, E) = instLiteral(MetaL, E) and instBody(MetaB, E) .
+
+  op extractFOVs : MetaLiteral MetaBody -> FirstOrderVarList .
+  eq extractFOVs( `[_:_`](SOV, MetaArgs) , nilMB) = MetaArgs .
+  eq extractFOVs( `[_:_`](SOV, MetaArgs) , `[_:_`](SOV2, FOVs2) MetaB) = MetaArgs , extractFOVs( `[_:_`](SOV2, FOVs2) , MetaB) .
+
+  --- SỬ DỤNG HÀM PHỤ ĐỂ TRÁNH CEQ (SIÊU TỐC)
+  op buildFOVEnv : FirstOrderVarList Env Nat -> Env .
+  eq buildFOVEnv(FOV, E, N) = $buildFOVEnv(lookupA(FOV, E) == v(999), FOV, E, N) .
+  eq buildFOVEnv((FOV , MetaArgs), E, N) = $buildFOVEnvList(lookupA(FOV, E) == v(999), FOV, MetaArgs, E, N) .
+
+  op $buildFOVEnv : Bool FirstOrderVar Env Nat -> Env .
+  eq $buildFOVEnv(true, FOV, E, N) = bindA(FOV, v(N)) ;; E .
+  eq $buildFOVEnv(false, FOV, E, N) = E .
+
+  op $buildFOVEnvList : Bool FirstOrderVar FirstOrderVarList Env Nat -> Env .
+  eq $buildFOVEnvList(true, FOV, MetaArgs, E, N) = buildFOVEnv(MetaArgs, bindA(FOV, v(N)) ;; E, s(N)) .
+  eq $buildFOVEnvList(false, FOV, MetaArgs, E, N) = buildFOVEnv(MetaArgs, E, N) .
+
+  op instantiate : Metarule Env -> Clause .
+  eq instantiate(metarule(SOVs, MetaL, MetaB), E) = $instantiate(metarule(SOVs, MetaL, MetaB), buildFOVEnv(extractFOVs(MetaL, MetaB), E, 1)) .
+
+  op $instantiate : Metarule Env -> Clause .
+  eq $instantiate(metarule(SOVs, MetaL, MetaB), E) = instLiteral(MetaL, E) :- instBody(MetaB, E) .
+
+  sort EnvSet .
+  subsort Env < EnvSet .
+  op emptyEnvSet : -> EnvSet [ctor] .
+  op _|||_ : EnvSet EnvSet -> EnvSet [ctor assoc comm idem id: emptyEnvSet] .
+
+  op genEnvs : SecondOrderVarList LogicArgList -> EnvSet .
+  op combineEnvs : EnvSet EnvSet -> EnvSet .
+  op attachEnv : Env EnvSet -> EnvSet .
+
+  vars Vocab : LogicArgList . vars ES ES1 ES2 : EnvSet .
+
+  eq genEnvs( `[_`](SOVs), Vocab ) = genEnvs(SOVs, Vocab) .
+  eq genEnvs(SOV, emptyArgList) = emptyEnvSet .
+  eq genEnvs(SOV, q(Q) @ Vocab) = bindP(SOV, Q) ||| genEnvs(SOV, Vocab) .
+  eq genEnvs(SOV | SOVs, Vocab) = combineEnvs(genEnvs(SOV, Vocab), genEnvs(SOVs, Vocab)) .
+
+  eq combineEnvs(emptyEnvSet, ES) = emptyEnvSet .
+  eq combineEnvs(E ||| ES1, ES2) = attachEnv(E, ES2) ||| combineEnvs(ES1, ES2) .
+
+  eq attachEnv(E, emptyEnvSet) = emptyEnvSet .
+  eq attachEnv(E, E2 ||| ES) = (E ;; E2) ||| attachEnv(E, ES) .
+endfm

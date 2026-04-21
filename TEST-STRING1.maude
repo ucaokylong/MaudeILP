@@ -1,0 +1,33 @@
+load ILP-SEARCH.maude
+load string1-case.maude
+
+fmod TEST-STRING1 is
+  protecting ILP-SEARCH .
+  protecting STRING1-CASE .
+  protecting META-LEVEL .
+
+  --- Độ sâu tìm kiếm (Số bước copy1/skip1 tối đa máy có thể nối)
+  eq MAX-DEPTH = 8 .
+
+  op M-PROB : -> [Module] .
+  --- TRỎ ĐÚNG VÀO MODULE STRING1-CASE
+  eq M-PROB = upModule('STRING1-CASE, false) .
+  
+  op POS-Data : -> TermList . eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+  
+  --- Vì bài này không có ví dụ NEG, ta trả về danh sách rỗng để tránh lỗi
+  op NEG-Data : -> TermList . eq NEG-Data = empty . 
+
+  op BK-Data : -> TermSet . 
+  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+  
+  op MR-Data : -> TermList . 
+  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+
+  op Induced-Program : -> ILPClauseSet .
+  eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, emptyClauseSet, MR-Data) .
+endfm
+
+--- THỰC THI
+set show timing on .
+reduce in TEST-STRING1 : simulate(Induced-Program) .

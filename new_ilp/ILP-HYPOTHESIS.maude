@@ -1,0 +1,27 @@
+fmod ILP-HYPOTHESIS is
+  protecting QID .
+  protecting NAT .
+
+  sort LogicVar LogicArg LogicArgList .
+  op v : Nat -> LogicVar [ctor] .
+  
+  --- BỌC QID LẠI ĐỂ CẮT ĐỨT SỰ ĐỤNG ĐỘ VỚI META-LEVEL CỦA MAUDE
+  op q : Qid -> LogicArg [ctor] . 
+  
+  subsort LogicVar < LogicArg < LogicArgList .
+  
+  op emptyArgList : -> LogicArgList [ctor] .
+  op _@_ : LogicArgList LogicArgList -> LogicArgList [ctor assoc id: emptyArgList prec 40] .
+
+  sort LogicLiteral LogicBody .
+  op pred : Qid LogicArgList -> LogicLiteral [ctor] .
+  subsort LogicLiteral < LogicBody .
+  op emptyBody : -> LogicBody [ctor] .
+  op _and_ : LogicBody LogicBody -> LogicBody [ctor assoc id: emptyBody prec 50] .
+
+  sort Clause Hypothesis .
+  op _:-_ : LogicLiteral LogicBody -> Clause [ctor prec 60] .
+  subsort Clause < Hypothesis .
+  op emptyHypothesis : -> Hypothesis [ctor] .
+  op _&_ : Hypothesis Hypothesis -> Hypothesis [ctor assoc comm id: emptyHypothesis prec 70] .
+endfm

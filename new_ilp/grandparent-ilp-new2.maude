@@ -1,0 +1,46 @@
+load METARULE.maude
+
+fmod GRANDPARENT-ILP-NEW2 is
+  protecting METARULE .
+
+  sort Person .
+  subsort Person < Entity .
+  ---subsort Person < FirstOrderVar .
+
+  ops ann amy andy bob steve linda gavin amelia spongebob : -> Person [ctor] .
+
+  ops mother father grandparent : Person Person -> Pred [ctor] .
+
+  eq BK =
+    mother(ann,   amy)
+    mother(ann,   andy)
+    mother(amy,   amelia)
+    mother(amy,   bob)
+    mother(linda, gavin)
+    father(steve, amy)
+    father(steve, andy)
+    father(andy,  spongebob)
+    father(gavin, amelia) .
+
+
+  eq POS =
+    grandparent(ann,   amelia)
+    grandparent(steve, amelia)
+    grandparent(steve, spongebob)
+    grandparent(linda, amelia) .
+
+  eq NEG =
+    grandparent(amy, amelia) .
+
+  var P Q R : Pred .
+  var A B C : Person .
+
+  --- QUAN TRONG: Phai co dau cach xung quanh | va :
+  --- [P | Q]   khong phai [P|Q]
+  --- [P : A,B] khong phai [P:A,B]
+  eq METARULES =
+    metarule([P | Q],     [P : A,B], [Q : A,B])
+    metarule([P | Q | R], [P : A,B], [Q : A,C] [R : C,B]) [nonexec] .
+
+endfm
+

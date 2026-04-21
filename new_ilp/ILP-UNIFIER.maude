@@ -1,0 +1,34 @@
+load ILP-SUBSTITUTION.maude
+
+fmod ILP-UNIFIER is
+  protecting ILP-SUBSTITUTION .
+  subsort LogicVar < FirstOrderVar .
+
+  sort EnvResult .
+  subsort Env < EnvResult .
+  op failEnv : -> EnvResult [ctor] .
+
+  vars Arg1 Arg2 : LogicArg . vars GArgList RArgList : LogicArgList .
+  vars Q1 Q2 : Qid . vars E : Env . vars ER : EnvResult . vars LV : LogicVar .
+
+  op matchArg : LogicArg LogicArg Env -> EnvResult .
+  ceq matchArg(Arg1, Arg2, E) = E if Arg1 == Arg2 .
+
+  ceq matchArg(LV, Arg2, E) = bindA(LV, Arg2) ;; E if lookupA(LV, E) == v(999) .
+  ceq matchArg(LV, Arg2, E) = matchArg(lookupA(LV, E), Arg2, E) if lookupA(LV, E) =/= v(999) .
+
+  ceq matchArg(Arg1, LV, E) = bindA(LV, Arg1) ;; E if lookupA(LV, E) == v(999) .
+  ceq matchArg(Arg1, LV, E) = matchArg(Arg1, lookupA(LV, E), E) if lookupA(LV, E) =/= v(999) .
+
+  eq matchArg(Arg1, Arg2, E) = failEnv [owise] .
+
+  op matchArgs : LogicArgList LogicArgList Env -> EnvResult .
+  eq matchArgs(emptyArgList, emptyArgList, E) = E .
+  ceq matchArgs((Arg1 @ GArgList), (Arg2 @ RArgList), E) = matchArgs(GArgList, RArgList, ER)
+    if ER := matchArg(Arg1, Arg2, E) /\ ER =/= failEnv .
+  eq matchArgs(GArgList, RArgList, E) = failEnv [owise] .
+
+  op matchLiteral : LogicLiteral LogicLiteral Env -> EnvResult .
+  ceq matchLiteral(pred(Q1, GArgList), pred(Q2, RArgList), E) = matchArgs(GArgList, RArgList, E) if Q1 == Q2 .
+  eq matchLiteral(pred(Q1, GArgList), pred(Q2, RArgList), E) = failEnv [owise] .
+endfm

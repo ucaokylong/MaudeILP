@@ -1,0 +1,28 @@
+load METALITERAL.maude
+
+fmod METARULE-BASE is
+  protecting METALITERAL .
+
+  sort SecondOrderVarList .
+  subsort SecondOrderVar < SecondOrderVarList .
+  --- FIX: Đổi SecondOrderVar thành SecondOrderVarList để đồng nhất kiểu
+  op _|_ : SecondOrderVarList SecondOrderVarList -> SecondOrderVarList [ctor assoc] .
+  op `[_`] : SecondOrderVarList -> SecondOrderVarList [ctor] .
+
+  sort Metarule .
+  op metarule : SecondOrderVarList MetaLiteral MetaBody -> Metarule [ctor] .
+endfm
+
+view Metarule from TRIV to METARULE-BASE is
+  sort Elt to Metarule .
+endv
+
+fmod METARULE is
+  protecting METARULE-BASE .
+  protecting LIST{Metarule} * (
+    sort NeList{Metarule} to NeMetaruleList,
+    sort List{Metarule}   to MetaruleList,
+    op nil                to nilMR
+  ) .
+  op METARULES : -> MetaruleList .
+endfm
