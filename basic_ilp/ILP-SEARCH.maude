@@ -144,7 +144,7 @@ fmod ILP-SEARCH is
   eq filterNodes(emptyNodeSet, NEG, TS) = emptyClauseSet .
   
   --- Vì searchMIL đã làm hết việc cắt tỉa và loại node rác, 
-  --- nên ở đây chỉ cần bóc lấy cái CS của Node chiến thắng là xong!
+  --- nên ở đây chỉ cần bóc lấy cái CS của Node thành công 
   eq filterNodes(node(empty, CS, Depth, N), NEG, TS) = CS .
   
   --- Đề phòng trường hợp input rác
