@@ -1,10 +1,11 @@
 load ILP-PROVER.maude
-load META-LEVEL
+
 
 fmod ILP-SEARCH is
   protecting ILP-PROVER .
   protecting META-LEVEL .
 
+  --- THIẾT LẬP CHIỀU DÀI TỐI ĐA CỦA CHƯƠNG TRÌNH MUỐN HỌC
   op MAX-CLAUSES : -> Nat .
   eq MAX-CLAUSES = 3 [owise] .
 
@@ -13,39 +14,49 @@ fmod ILP-SEARCH is
   op emptySpace : -> HypothesisSpace [ctor] .
   op _||_ : HypothesisSpace HypothesisSpace -> HypothesisSpace [ctor assoc id: emptySpace] .
 
-  var GlobalH Prog BK-Data C : Hypothesis .
+  var GlobalH Prog BK-Data C C2 : Hypothesis .
   var P Goal : LogicLiteral .
   var Body POS-Data NEG-Data : LogicBody .
   var Queue BaseSpace Acc : HypothesisSpace .
   var MRs : MetaruleList . var Vocab Learnable : LogicArgList .
   var MR : Metarule . var E : Env . var ES : EnvSet .
   var Depth MaxD D : Nat .
-  vars Q R S : Qid . vars AL1 AL2 AL3 : LogicArgList .
+  vars Q R S TargetQ : Qid . vars AL1 AL2 AL3 : LogicArgList .
   var Arg : LogicArg .
 
   --- ==============================================================
-  --- PREDICATE RANKING: Chặn Đệ quy Trái, NHƯNG CHO PHÉP Đệ quy Đuôi
+  --- DYNAMIC RELATIVE PREDICATE RANKING (KHÔNG CÒN HARDCODE)
+  --- Tự động gán cấp bậc để cắt tỉa không gian tìm kiếm
   --- ==============================================================
-  op getRank : Qid -> Nat .
-  eq getRank('f) = 10 . eq getRank('grandparent) = 10 .
-  eq getRank('inv1) = 9 . eq getRank('inv2) = 8 .
-  eq getRank(Q) = 1 [owise] .
+  op isInv : Qid -> Bool .
+  eq isInv(Q) = (substr(string(Q), 0, 3) == "inv") .
+
+  --- Mốc Rank trần (Ceiling) tự động chạy theo MAX-CLAUSES
+  op MAX-RANK : -> Nat .
+  eq MAX-RANK = MAX-CLAUSES + 2 .
+
+  --- Dùng hàm sd (symmetric difference) để trừ số an toàn trong Maude
+  op getRank : Qid Qid -> Nat .
+  ceq getRank(Q, TargetQ) = MAX-RANK if Q == TargetQ .
+  ceq getRank(Q, TargetQ) = sd(MAX-RANK, 1) if isInv(Q) .
+  eq getRank(Q, TargetQ) = 1 [owise] .
 
   op inVocab : Qid LogicArgList -> Bool .
   eq inVocab(Q, emptyArgList) = false .
   eq inVocab(Q, q(Q) @ Vocab) = true .
   eq inVocab(Q, Arg @ Vocab) = inVocab(Q, Vocab) [owise] .
-
-  op isValid : Clause LogicArgList -> Bool .
-  eq isValid(pred(Q, AL1) :- emptyBody, Learnable) = inVocab(Q, Learnable) .
-  eq isValid(pred(Q, AL1) :- pred(R, AL2) and emptyBody, Learnable) = 
-     inVocab(Q, Learnable) and (getRank(Q) > getRank(R)) .
-  
-  --- ĐẢM BẢO CHO PHÉP: f(A,B) :- copy1(A,C), f(C,B)
-  eq isValid(pred(Q, AL1) :- pred(R, AL2) and pred(S, AL3) and emptyBody, Learnable) = 
-     inVocab(Q, Learnable) and (getRank(Q) > getRank(R)) and (getRank(Q) >= getRank(S)) .
-  eq isValid(C:Clause, Learnable) = false [owise] .
   --- ==============================================================
+
+  --- Kiểm tra tính hợp lệ của luật dựa trên TargetQ
+  op isValid : Clause LogicArgList Qid -> Bool .
+  eq isValid(pred(Q, AL1) :- emptyBody, Learnable, TargetQ) = inVocab(Q, Learnable) .
+  eq isValid(pred(Q, AL1) :- pred(R, AL2) and emptyBody, Learnable, TargetQ) = 
+     if inVocab(Q, Learnable) then getRank(Q, TargetQ) > getRank(R, TargetQ) else false fi .
+  eq isValid(pred(Q, AL1) :- pred(R, AL2) and pred(S, AL3) and emptyBody, Learnable, TargetQ) = 
+     if inVocab(Q, Learnable) then 
+        if getRank(Q, TargetQ) > getRank(R, TargetQ) then getRank(Q, TargetQ) >= getRank(S, TargetQ) else false fi
+     else false fi .
+  eq isValid(C:Clause, Learnable, TargetQ) = false [owise] .
 
   op provesAll : Hypothesis Hypothesis LogicBody -> Bool [memo] .
   eq provesAll(Prog, BK-Data, emptyBody) = true .
@@ -59,26 +70,32 @@ fmod ILP-SEARCH is
     if entails(Prog, BK-Data, Goal, emptyEnv, MAX-PROOF-DEPTH) =/= emptyEnvSet .
   eq provesAny(Prog, BK-Data, Goal and Body) = provesAny(Prog, BK-Data, Body) [owise] .
 
-  op applyEnvs : Metarule EnvSet LogicArgList -> HypothesisSpace .
-  eq applyEnvs(MR, emptyEnvSet, Learnable) = emptySpace .
-  eq applyEnvs(MR, E ||| ES, Learnable) = 
-     if isValid(instantiate(MR, E), Learnable) then instantiate(MR, E) || applyEnvs(MR, ES, Learnable)
-     else applyEnvs(MR, ES, Learnable) fi .
+  op applyEnvs : Metarule EnvSet LogicArgList Qid -> HypothesisSpace .
+  eq applyEnvs(MR, emptyEnvSet, Learnable, TargetQ) = emptySpace .
+  eq applyEnvs(MR, E ||| ES, Learnable, TargetQ) = 
+     if isValid(instantiate(MR, E), Learnable, TargetQ) then instantiate(MR, E) || applyEnvs(MR, ES, Learnable, TargetQ)
+     else applyEnvs(MR, ES, Learnable, TargetQ) fi .
 
   op getSOVs : Metarule -> SecondOrderVarList .
   eq getSOVs(metarule(SOVs:SecondOrderVarList, MetaL:MetaLiteral, MetaB:MetaBody)) = SOVs:SecondOrderVarList .
 
-  op buildBase : MetaruleList LogicArgList LogicArgList -> HypothesisSpace .
-  eq buildBase(nilMR, Vocab, Learnable) = emptySpace .
-  eq buildBase(MR MRs, Vocab, Learnable) = applyEnvs(MR, genEnvs(getSOVs(MR), Vocab), Learnable) || buildBase(MRs, Vocab, Learnable) .
+  op buildBase : MetaruleList LogicArgList LogicArgList Qid -> HypothesisSpace .
+  eq buildBase(nilMR, Vocab, Learnable, TargetQ) = emptySpace .
+  eq buildBase(MR MRs, Vocab, Learnable, TargetQ) = applyEnvs(MR, genEnvs(getSOVs(MR), Vocab), Learnable, TargetQ) || buildBase(MRs, Vocab, Learnable, TargetQ) .
+
+  op contains : Hypothesis Clause -> Bool .
+  eq contains(emptyHypothesis, C) = false .
+  eq contains(C2 & Prog, C) = if C2 == C then true else contains(Prog, C) fi .
 
   op checkHypo : Hypothesis LogicLiteral LogicBody Hypothesis -> Bool .
-  eq checkHypo(Prog, P, NEG-Data, BK-Data) = provesAll(Prog, BK-Data, P) and-then not provesAny(Prog, BK-Data, NEG-Data) .
+  eq checkHypo(Prog, P, NEG-Data, BK-Data) = 
+     if provesAll(Prog, BK-Data, P) then not provesAny(Prog, BK-Data, NEG-Data) else false fi .
 
-  --- THUẬT TOÁN IDDFS TỔ HỢP
   op dfs : Nat Hypothesis HypothesisSpace LogicLiteral LogicBody Hypothesis Hypothesis -> Hypothesis .
   eq dfs(0, Prog, BaseSpace, P, NEG-Data, BK-Data, GlobalH) =
-     if (Prog =/= emptyHypothesis) and-then checkHypo(GlobalH & Prog, P, NEG-Data, BK-Data) then Prog else emptyHypothesis fi .
+     if Prog == emptyHypothesis then emptyHypothesis 
+     else (if checkHypo(GlobalH & Prog, P, NEG-Data, BK-Data) then Prog else emptyHypothesis fi) fi .
+     
   eq dfs(s(D), Prog, emptySpace, P, NEG-Data, BK-Data, GlobalH) = emptyHypothesis .
   eq dfs(s(D), Prog, C || BaseSpace, P, NEG-Data, BK-Data, GlobalH) =
      $checkDFS(dfs(D, Prog & C, BaseSpace, P, NEG-Data, BK-Data, GlobalH), s(D), Prog, BaseSpace, P, NEG-Data, BK-Data, GlobalH) .

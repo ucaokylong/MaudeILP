@@ -1,0 +1,41 @@
+load METARULE.maude
+
+fmod HEAD-TAIL-CASE is
+  protecting METARULE .
+
+  --- ĐỔI TÊN SORT: Dùng 'Data' thay vì 'Person', vẫn là subsort của Entity
+  sort Data .
+  subsort Data < Entity .
+
+  --- KHAI BÁO CÁC THỰC THỂ (Đại diện cho List và các giá trị)
+  --- listILP = [i,l,p], listLP = [l,p], listP = [p]
+  ops listILP listLP listP emptyList : -> Data [ctor] .
+  ops valI valL valP : -> Data [ctor] .
+
+  --- KHAI BÁO VỊ TỪ
+  ops head tail f : Data Data -> Pred [ctor] .
+
+  --- BACKGROUND KNOWLEDGE
+  eq BK =
+    head(listILP, valI)
+    tail(listILP, listLP)
+    head(listLP, valL)
+    tail(listLP, listP)
+    head(listP, valP)
+    tail(listP, emptyList) .
+
+  --- POSITIVE EXAMPLES (Chỉ có 1 ví dụ như trong ảnh)
+  eq POS =
+    f(listILP, valP) .
+
+  --- SỬA LẠI: KHÔNG CÓ NEGATIVE EXAMPLES!
+
+  --- BIẾN 
+  var P Q R : Pred .
+  var A B C : Data .
+
+  --- METARULES (Chỉ dùng chain rule)
+  eq METARULES =
+    metarule([P | Q | R], [P : A,B], [Q : A,C] [R : C,B]) [nonexec] .
+
+endfm

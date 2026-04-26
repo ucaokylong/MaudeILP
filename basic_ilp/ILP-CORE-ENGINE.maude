@@ -1,0 +1,265 @@
+load ILP-EXTRACT.maude
+
+fmod ILP-CORE-ENGINE is
+  protecting ILP-EXTRACT .
+
+  sort BoundLiteral BoundBody ILPClause ILPClauseSet .
+  subsort BoundLiteral < BoundBody .
+  subsort ILPClause < ILPClauseSet .
+  
+  op _<<_>> : Qid TermList -> BoundLiteral [ctor prec 30] .
+  op emptyBB : -> BoundBody [ctor] .
+  op _&_ : BoundBody BoundBody -> BoundBody [ctor assoc id: emptyBB prec 40] .
+  op _:-_ : BoundLiteral BoundBody -> ILPClause [ctor prec 50] .
+  
+  op emptyClauseSet : -> ILPClauseSet [ctor] .
+  op _++_ : ILPClauseSet ILPClauseSet -> ILPClauseSet [ctor assoc comm idem id: emptyClauseSet] .
+
+  sort TermSet .
+  subsort Term < TermSet .
+  op emptyTS : -> TermSet [ctor] .
+  op _U_ : TermSet TermSet -> TermSet [ctor assoc comm idem id: emptyTS] .
+  
+  --- O(1) HASH SET LOOKUP
+  op _\in_ : Term TermSet -> Bool .
+  eq T:Term \in (T:Term U TS:TermSet) = true .
+  eq T:Term \in TS:TermSet = false [owise] .
+
+  op listToSet : TermList -> TermSet .
+  eq listToSet(empty) = emptyTS .
+  eq listToSet((T:Term, TL:TermList)) = T:Term U listToSet(TL:TermList) .
+  eq listToSet(T:Term) = T:Term U emptyTS .
+
+  sort BindVal Bind Env Env? EnvSet .
+  subsort Term Qid < BindVal .
+  subsort Bind < Env .
+  subsort Env < Env? .
+  subsort Env < EnvSet .
+  
+  op _->_ : Term BindVal -> Bind [ctor] .
+  op emptyEnv : -> Env [ctor] .
+  op _,_ : Env Env -> Env [ctor assoc comm id: emptyEnv] .
+  op failEnv : -> Env? [ctor] .
+  
+  op emptyEnvSet : -> EnvSet [ctor] .
+  op _++_ : EnvSet EnvSet -> EnvSet [ctor assoc comm idem id: emptyEnvSet] .
+
+  vars T V Fact P MR : Term . vars TL TL1 TL2 Args : TermList .
+  vars TS FullTS : TermSet . vars E E' : Env . vars E? : Env? . 
+  vars BindV : BindVal . vars Q F : Qid .
+  vars SOV FOVList MetaLit : Term . vars RestLits : TermList .
+  vars Goals1 Goals2 : TermList . vars BB1 BB2 : BoundBody .
+  vars N N' : Nat . vars B1 B2 : Bool .
+
+  op getVar : Term Env? -> BindVal .
+  eq getVar(V, E , (V -> BindV)) = BindV .
+  eq getVar(V, E?) = 'nil.Term [owise] .
+
+  op bindVar : Term BindVal Env? -> Env? .
+  eq bindVar(V, BindV, failEnv) = failEnv .
+  eq bindVar(V, BindV, E) = if getVar(V, E) == 'nil.Term then E , (V -> BindV) else (if getVar(V, E) == BindV then E else failEnv fi) fi .
+
+  op func : Term -> Qid .
+  eq func(F[TL]) = F . eq func(F) = F . eq func(T) = 'nil [owise] .
+
+  op getArgs : Term -> TermList .
+  eq getArgs(F[TL]) = TL . eq getArgs(T) = empty [owise] .
+
+  op extractFOVs : Term -> TermList .
+  eq extractFOVs('_`,_[TL]) = TL . eq extractFOVs(T) = T [owise] .
+  
+  op getHead : Term -> Term . eq getHead('metarule[SOV, T, V]) = T .
+  op getBody : Term -> Term . eq getBody('metarule[SOV, T, V]) = V .
+  
+  op extractLiterals : Term -> TermList .
+  eq extractLiterals('__[TL]) = TL .
+  eq extractLiterals('nilMB.MetaBody) = empty .
+  eq extractLiterals(T) = T [owise] .
+
+  op matchLiteral : Term Term Env? -> Env? .
+  eq matchLiteral(T, Fact, failEnv) = failEnv .
+  eq matchLiteral('`[_:_`][SOV, FOVList], Fact, E) = 
+     matchArgs(extractFOVs(FOVList), getArgs(Fact), bindVar(SOV, func(Fact), E)) .
+  
+  eq matchLiteral(Q:Qid[TL1:TermList], Q:Qid[TL2:TermList], E:Env) = matchArgs(TL1:TermList, TL2:TermList, E:Env) .
+  eq matchLiteral(Q:Qid, Q:Qid, E:Env) = E:Env .
+
+  op matchArgs : TermList TermList Env? -> Env? .
+  eq matchArgs(empty, empty, E?) = E? .
+  eq matchArgs((V, TL1), (T, TL2), E?) = matchArgs(TL1, TL2, bindVar(V, T, E?)) .
+  eq matchArgs(V, T, E?) = bindVar(V, T, E?) .
+  eq matchArgs(TL1, TL2, E?) = failEnv [owise] .
+
+  op proveBody : TermList Env? TermSet TermSet -> EnvSet .
+  eq proveBody(TL, failEnv, TS, FullTS) = emptyEnvSet .
+  eq proveBody(empty, E, TS, FullTS) = E .
+  
+  op proveBodyLit : Term TermList Env TermSet TermSet -> EnvSet .
+  eq proveBody((T, TL), E, TS, FullTS) = proveBodyLit(T, TL, E, TS, FullTS) .
+  eq proveBody(T, E, TS, FullTS) = proveBodyLit(T, empty, E, TS, FullTS) .
+  eq proveBodyLit(T:Term, TL:TermList, E:Env, emptyTS, FullTS:TermSet) = emptyEnvSet . 
+  
+  ceq proveBodyLit(T:Term, TL:TermList, E:Env, Fact:Term U TS:TermSet, FullTS:TermSet) =
+     proveBody(TL:TermList, E':Env, FullTS:TermSet, FullTS:TermSet) ++
+     proveBodyLit(T:Term, TL:TermList, E:Env, TS:TermSet, FullTS:TermSet)
+   if E':Env := matchLiteral(T:Term, Fact:Term, E:Env) 
+   /\ E':Env =/= failEnv .
+  eq proveBodyLit(T:Term, TL:TermList, E:Env, Fact:Term U TS:TermSet, FullTS:TermSet) = 
+     proveBodyLit(T:Term, TL:TermList, E:Env, TS:TermSet, FullTS:TermSet) [owise] .
+
+  op getQid : BindVal -> Qid . eq getQid(Q) = Q . eq getQid(T) = 'nil .
+
+  op instLit : Term Env -> BoundLiteral . 
+  eq instLit('`[_:_`][SOV, FOVList], E) = getQid(getVar(SOV, E)) << extractFOVs(FOVList) >> .
+
+  op instBody : TermList Env -> BoundBody .
+  eq instBody(empty, E) = emptyBB .
+  eq instBody((T, TL), E) = instLit(T, E) & instBody(TL, E) . eq instBody(T, E) = instLit(T, E) .
+
+  op instantiate : Term Env -> ILPClause . 
+  eq instantiate(MR, E) = (instLit(getHead(MR), E) :- instBody(extractLiterals(getBody(MR)), E)) .
+
+  --- =========================================================================
+  --- TOOLKIT CHO ABDUCTION (BƠM DỮ LIỆU VÀO GOAL)
+  --- =========================================================================
+  op getPredVar : Term -> Term .
+  eq getPredVar('`[_:_`][SOV, FOVList]) = SOV .
+
+  op buildInvName : Nat -> Qid .
+  eq buildInvName(N) = qid("inv" + string(N, 10)) .
+
+  op evalVar : Term Env -> Term .
+  eq evalVar(V, (V -> T) , E) = T .
+  eq evalVar(V, E) = V [owise] .
+
+  op groundArgs : TermList Env -> TermList .
+  eq groundArgs(empty, E) = empty .
+  eq groundArgs((V, TL), E) = evalVar(V, E) , groundArgs(TL, E) .
+
+  op groundGoal : Term Env -> Term .
+  eq groundGoal('`[_:_`][SOV, FOVList], E) = 
+     if groundArgs(extractFOVs(FOVList), E) == empty then
+        getQid(getVar(SOV, E))
+     else
+        getQid(getVar(SOV, E))[groundArgs(extractFOVs(FOVList), E)]
+     fi .
+  eq groundGoal(T, E) = T [owise] .
+
+  sort AbductRes AbductResSet .
+  subsort AbductRes < AbductResSet .
+  op emptyAbductSet : -> AbductResSet [ctor] .
+  op _++_ : AbductResSet AbductResSet -> AbductResSet [ctor assoc comm idem id: emptyAbductSet] .
+  
+  op `[_|_|_|_|_`] : Env TermList BoundBody Nat Bool -> AbductRes [ctor] .
+
+  op mergeGoals : TermList TermList -> TermList .
+  eq mergeGoals(empty, TL) = TL .
+  eq mergeGoals(TL, empty) = TL .
+  eq mergeGoals((T, TL1), TL2) = (T, mergeGoals(TL1, TL2)) .
+
+  op abduceBody : TermList Env TermSet TermSet Nat -> AbductResSet .
+  eq abduceBody(empty, E, TS, FullTS, N) = [ E | empty | emptyBB | N | false ] .
+  eq abduceBody((MetaLit, RestLits), E, TS, FullTS, N) = 
+      combineAbduct( abduceLit(MetaLit, E, TS, N), RestLits, FullTS ) .
+
+  op combineAbduct : AbductResSet TermList TermSet -> AbductResSet .
+  eq combineAbduct(emptyAbductSet, RestLits, FullTS) = emptyAbductSet .
+  eq combineAbduct([ E | Goals1 | BB1 | N | B1 ] ++ RestRes:AbductResSet, RestLits, FullTS) = 
+      mergeRes(Goals1, BB1, B1, abduceBody(RestLits, E, FullTS, FullTS, N)) ++ 
+      combineAbduct(RestRes:AbductResSet, RestLits, FullTS) .
+
+  op mergeRes : TermList BoundBody Bool AbductResSet -> AbductResSet .
+  eq mergeRes(Goals1, BB1, B1, emptyAbductSet) = emptyAbductSet .
+  eq mergeRes(Goals1, BB1, B1, [ E | Goals2 | BB2 | N | B2 ] ++ RestRes:AbductResSet) = 
+      [ E | mergeGoals(Goals1, Goals2) | (BB1 & BB2) | N | (B1 or B2) ] ++ 
+      mergeRes(Goals1, BB1, B1, RestRes:AbductResSet) .
+
+  op abduceLit : Term Env TermSet Nat -> AbductResSet .
+  
+  eq abduceLit(MetaLit, E, emptyTS, N) = 
+     if getVar(getPredVar(MetaLit), E) == 'nil.Term then
+        [ bindVar(getPredVar(MetaLit), buildInvName(N), E) 
+        | groundGoal(MetaLit, bindVar(getPredVar(MetaLit), buildInvName(N), E)) 
+        | instLit(MetaLit, bindVar(getPredVar(MetaLit), buildInvName(N), E)) 
+        | N + 1 
+        | true ]
+     else emptyAbductSet fi .
+
+  ceq abduceLit(MetaLit, E, Fact U TS, N) = 
+      [ E' | empty | instLit(MetaLit, E') | N | false ] ++ 
+      abduceLit(MetaLit, E, TS, N)
+    if E' := matchLiteral(MetaLit, Fact, E) /\ E' =/= failEnv .
+  eq abduceLit(MetaLit, E, Fact U TS, N) = abduceLit(MetaLit, E, TS, N) [owise] .
+
+  --- =========================================================================
+  --- DEDUCTION ENGINE (Máy Suy Diễn)
+  --- =========================================================================
+  vars Goal : Term . vars Goals RestGoalsM : TermList .
+  vars CS FullCS : ILPClauseSet . vars C : ILPClause .
+  vars Head Lit : BoundLiteral . vars Body : BoundBody .
+
+  op isProvable : Term ILPClauseSet TermSet -> Bool .
+  op proveGoal : Term Env ILPClauseSet TermSet -> EnvSet .
+  op proveGoalTS : Term Env TermSet ILPClauseSet TermSet -> EnvSet .
+  op proveGoalCS : Term Env ILPClauseSet ILPClauseSet TermSet -> EnvSet .
+  op proveGoals : TermList Env ILPClauseSet TermSet -> EnvSet .
+  op proveGoalsSet : TermList EnvSet ILPClauseSet TermSet -> EnvSet .
+
+  eq isProvable(P, CS, TS) = (proveGoal(P, emptyEnv, CS, TS) =/= emptyEnvSet) .
+
+  eq proveGoal(Goal, E, CS, TS) = proveGoalTS(Goal, E, TS, CS, TS) ++ proveGoalCS(Goal, E, CS, CS, TS) .
+
+  eq proveGoalTS(Goal, E, emptyTS, CS, FullTS) = emptyEnvSet .
+  ceq proveGoalTS(Goal, E, Fact U TS, CS, FullTS) = 
+      E' ++ proveGoalTS(Goal, E, TS, CS, FullTS)
+    if E' := matchLiteral(Goal, Fact, E) /\ E' =/= failEnv .
+  eq proveGoalTS(Goal, E, Fact U TS, CS, FullTS) = proveGoalTS(Goal, E, TS, CS, FullTS) [owise] .
+
+  op convertToGoal : BoundLiteral -> Term .
+  eq convertToGoal(Q:Qid << empty >>) = Q:Qid .
+  eq convertToGoal(Q:Qid << Args:TermList >>) = Q:Qid[Args:TermList] [owise] .
+
+  op bodyToTermList : BoundBody -> TermList .
+  eq bodyToTermList(emptyBB) = empty .
+  eq bodyToTermList(Lit & Body) = convertToGoal(Lit) , bodyToTermList(Body) .
+  eq bodyToTermList(Lit) = convertToGoal(Lit) .
+
+  eq proveGoalCS(Goal, E, emptyClauseSet, FullCS, FullTS) = emptyEnvSet .
+  ceq proveGoalCS(Goal, E, (Head :- Body) ++ CS, FullCS, FullTS) = 
+      proveGoalsSet(bodyToTermList(Body), E', FullCS, FullTS) ++ proveGoalCS(Goal, E, CS, FullCS, FullTS)
+    if E' := matchLiteral(convertToGoal(Head), Goal, E) /\ E' =/= failEnv .
+  eq proveGoalCS(Goal, E, C ++ CS, FullCS, FullTS) = proveGoalCS(Goal, E, CS, FullCS, FullTS) [owise] .
+
+  eq proveGoals(empty, E, CS, TS) = E .
+  eq proveGoals((Goal, RestGoalsM), E, CS, TS) = 
+      proveGoalsSet(RestGoalsM, proveGoal(Goal, E, CS, TS), CS, TS) .
+
+  eq proveGoalsSet(Goals, emptyEnvSet, CS, TS) = emptyEnvSet .
+  eq proveGoalsSet(Goals, E ++ ES:EnvSet, CS, TS) = 
+      proveGoals(Goals, E, CS, TS) ++ proveGoalsSet(Goals, ES:EnvSet, CS, TS) .
+
+endfm
+
+fmod ILP-DISPLAY is
+  protecting ILP-CORE-ENGINE .
+  protecting CONVERSION .
+  vars Q : Qid . vars TL : TermList .
+  vars C : ILPClause . vars CS : ILPClauseSet .
+  vars B : BoundBody . vars L : BoundLiteral . vars T : Term .
+  
+  op cleanName : Term -> String . eq cleanName(T) = beforeDot(string(getName(T))) .
+  op showTL : TermList -> String .
+  eq showTL(empty) = "" . eq showTL(T) = cleanName(T) .
+  eq showTL((T, TL)) = cleanName(T) + "," + showTL(TL) .
+  
+  op showLit : BoundLiteral -> String .
+  eq showLit(Q << TL >>) = string(Q) + "(" + showTL(TL) + ")" .
+  op showBody : BoundBody -> String . eq showBody(emptyBB) = "." . eq showBody(L) = showLit(L) + " ." .
+  eq showBody(L & B) = showLit(L) + ", " + showBody(B) .
+  op showClause : ILPClause -> String .
+  eq showClause(L :- B) = showLit(L) + " :- " + showBody(B) .
+  
+  op simulate : ILPClauseSet -> String .
+  eq simulate(emptyClauseSet) = "" . 
+  eq simulate(C ++ CS) = showClause(C) + (if CS == emptyClauseSet then "" else "   " fi) + simulate(CS) .
+endfm

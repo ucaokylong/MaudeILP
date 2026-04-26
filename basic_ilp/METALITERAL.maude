@@ -1,0 +1,26 @@
+load METAVAR.maude
+
+fmod METALITERAL-BASE is
+  protecting METAVAR .
+
+  sort FirstOrderVarList .
+  subsort FirstOrderVar < FirstOrderVarList .
+  --- FIX: Đổi FirstOrderVar thành FirstOrderVarList để đồng nhất kiểu
+  op _,_ : FirstOrderVarList FirstOrderVarList -> FirstOrderVarList [ctor assoc] .
+
+  sort MetaLiteral .
+  op `[_:_`] : SecondOrderVar FirstOrderVarList -> MetaLiteral [ctor] .
+endfm
+
+view MetaLiteral from TRIV to METALITERAL-BASE is
+  sort Elt to MetaLiteral .
+endv
+
+fmod METALITERAL is
+  protecting METALITERAL-BASE .
+  protecting LIST{MetaLiteral} * (
+    sort NeList{MetaLiteral} to NeMetaBody,
+    sort List{MetaLiteral}   to MetaBody,
+    op nil                   to nilMB
+  ) .
+endfm

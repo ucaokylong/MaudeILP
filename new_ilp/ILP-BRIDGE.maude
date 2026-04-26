@@ -54,7 +54,7 @@ fmod ILP-BRIDGE is
   vars Lit : LogicLiteral .
   vars Body POS-Data NEG-Data : LogicBody .
   vars C : Clause . vars H BK-Data BK-Hyp : Hypothesis .
-  var BK : TermSet . var MRs : MetaruleList .
+  var BK : TermSet . var MRs : MetaruleList . var N : Nat .
 
   op t : Term -> LogicArg [ctor] .
 
@@ -82,7 +82,7 @@ fmod ILP-BRIDGE is
   op simulate : Hypothesis -> String .
   eq simulate(emptyHypothesis) = "--- [NO SOLUTION FOUND] ---" .
   eq simulate(C) = showClause(C) .
-  eq simulate(C & H) = showClause(C) + "\n" + simulate(H) [owise] .
+  eq simulate(C & H) = showClause(C) + " " + simulate(H) [owise] .
 
   op toArgs : TermList -> LogicArgList .
   eq toArgs(empty) = emptyArgList .
@@ -123,6 +123,12 @@ fmod ILP-BRIDGE is
   eq extractVocabHyp((pred(Q, AL) :- Body) & H) = q(Q) @ extractVocabHyp(H) .
   eq extractVocabHyp(C & H) = extractVocabHyp(H) [owise] .
 
+  --- TỰ ĐỘNG TÌM TARGET PREDICATE TỪ POSITIVE EXAMPLES
+  op extractTarget : LogicBody -> Qid .
+  eq extractTarget(pred(Q, AL) and Body) = Q .
+  eq extractTarget(pred(Q, AL)) = Q .
+  eq extractTarget(emptyBody) = 'errTarget .
+
   op removeAll : LogicArg LogicArgList -> LogicArgList .
   eq removeAll(Arg, emptyArgList) = emptyArgList .
   eq removeAll(Arg, Arg @ AL) = removeAll(Arg, AL) .
@@ -138,25 +144,36 @@ fmod ILP-BRIDGE is
   eq toMRList((T:Term , TL:TermList)) = downTerm(T:Term, errMR) toMRList(TL:TermList) .
   eq toMRList(T:Term) = downTerm(T:Term, errMR) [owise] .
 
-  op injectPI : -> LogicArgList .
-  eq injectPI = q('inv1) @ q('inv2) .
+  --- =========================================================
+  --- DYNAMIC PREDICATE INVENTION GENERATOR
+  --- Tự động đẻ danh sách [inv1, inv2...] an toàn bằng phương trình
+  --- =========================================================
+  op genPIs : Nat -> LogicArgList .
+  eq genPIs(0) = emptyArgList .
+  eq genPIs(s(N:Nat)) = q(qid("inv" + string(s(N:Nat), 10))) @ genPIs(N:Nat) .
 
-  --- CỔNG 4 THAM SỐ (Grandparent, HeadTail - CHO PHÉP INJECT PI)
+  op injectPI : -> LogicArgList .
+  op $injectPI : Bool Nat -> LogicArgList .
+  eq injectPI = $injectPI(MAX-CLAUSES > 1, MAX-CLAUSES) .
+  eq $injectPI(true, N:Nat) = genPIs(sd(N:Nat, 1)) .
+  eq $injectPI(false, N:Nat) = emptyArgList .
+  --- =========================================================
+
   op runILP : TermList TermList TermSet TermList -> Hypothesis .
   eq runILP(POS, NEG, BK, MR) = 
      $runILP(POS, NEG, setToHypothesis(BK), MR, 
              removeDup(extractVocabTL(POS) @ extractVocabTS(BK) @ injectPI),
              removeDup(extractVocabTL(POS) @ injectPI)) .
 
-  --- CỔNG 5 THAM SỐ (Cho String1 - ĐÃ XÓA INJECT PI, NGĂN BÙNG NỔ TỔ HỢP)
   op runILPHyp : TermList TermList Hypothesis TermList LogicArgList -> Hypothesis .
   eq runILPHyp(POS, NEG, BK-Hyp, MR, ExtraVocab) = 
      $runILP(POS, NEG, BK-Hyp, MR, 
              removeDup(extractVocabTL(POS) @ extractVocabHyp(BK-Hyp) @ ExtraVocab),
              removeDup(extractVocabTL(POS))) .
 
+  --- TRUYỀN TARGET PREDICATE VÀO BUILDBASE ĐỂ RANKING
   op $runILP : TermList TermList Hypothesis TermList LogicArgList LogicArgList -> Hypothesis .
   eq $runILP(POS, NEG, BK-Data, MR, Vocab, Learnable) = 
      greedyCover(toBody(POS), toBody(NEG), BK-Data, emptyHypothesis, 
-                 buildBase(toMRList(MR), Vocab, Learnable)) .
+                 buildBase(toMRList(MR), Vocab, Learnable, extractTarget(toBody(POS)))) .
 endfm

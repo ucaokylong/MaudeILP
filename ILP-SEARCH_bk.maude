@@ -20,11 +20,23 @@ fmod ILP-SEARCH is
   vars Body : BoundBody . vars E : Env .
 
   --- =========================================================================
+  --- SUB-TASK HOOKS (ĐỂ FILE CASE TỰ ĐỊNH NGHĨA CÁCH BÓC TÁCH DỮ LIỆU)
+  --- =========================================================================
+  op hasInnerTask : Term -> Bool .
+  eq hasInnerTask(T:Term) = false [owise] .
+
+  op extractInnerInput : Term -> Term .
+  eq extractInnerInput(T:Term) = 'nil.Term [owise] .
+
+  op extractInnerOutput : Term -> Term .
+  eq extractInnerOutput(T:Term) = 'nil.Term [owise] .
+
+  --- =========================================================================
   --- ĐÁNH GIÁ ĐỘ BAO PHỦ
   --- =========================================================================
   op isCovered : Term ILPClauseSet TermSet -> Bool .
   eq isCovered(P, CS, TS) = (P \in TS) or solveRecursive(P, CS, TS) .
-  
+
   op solveRecursive : Term ILPClauseSet TermSet -> Bool .
   eq solveRecursive(P, emptyClauseSet, TS) = false .
   ceq solveRecursive(P, (Head :- Body) ++ CS, TS) = 
@@ -61,13 +73,12 @@ fmod ILP-SEARCH is
 
   op findPath : Term Term Term TermSet TermSet Nat -> PathList .
   ceq findPath(P, A, B, Fact U TS, FullTS, 1) = end(func(Fact), getContext(Fact)) ||
-      findPath(P, A, B, TS, FullTS, 1) 
+  findPath(P, A, B, TS, FullTS, 1) 
       if (getInput(Fact) == A) and (getOutput(Fact) == B) 
       and (getArity(Fact) == getArity(P)) 
       and (getContext(Fact) == getContext(P)) .
-
   ceq findPath(P, A, B, Fact U TS, FullTS, s(s(N))) = attach(func(Fact), getContext(Fact), findPath(P, getOutput(Fact), B, FullTS, FullTS, s(N))) ||
-      findPath(P, A, B, TS, FullTS, s(s(N))) 
+  findPath(P, A, B, TS, FullTS, s(s(N))) 
       if (getInput(Fact) == A) 
       and (getArity(Fact) == getArity(P)) 
       and (getContext(Fact) == getContext(P)) .
@@ -96,13 +107,11 @@ fmod ILP-SEARCH is
        Q << buildFactArgs(Q, empty, 'A:Entity, 'C:Entity, P) >> & 
        wrapPayload(R, TL2, N, 'C:Entity, 'B:Entity, P)) 
       ++ genInvClause(R, TL2, N, P) .
-
   eq chunkPath(F, step(Q, empty, step(R, TL2, Rest)), N, P) = 
       (F << buildHeadArgs('A:Entity, 'B:Entity, P) >> :- 
        Q << buildFactArgs(Q, empty, 'A:Entity, 'C:Entity, P) >> & 
        buildInvName(N) << buildHeadArgs('C:Entity, 'B:Entity, P) >>) 
       ++ chunkPath(buildInvName(N), step(R, TL2, Rest), s(N), P) .
-
   ceq chunkPath(F, step(Q, TL1, end(R, TL2)), N, P) = 
       (F << buildHeadArgs('A:Entity, 'B:Entity, P) >> :- 
        buildInvName(N) << buildHeadArgs('A:Entity, 'C:Entity, P) >> & 
@@ -110,7 +119,6 @@ fmod ILP-SEARCH is
       ++ genInvClause(Q, TL1, N, P) 
       ++ genInvClause(R, TL2, s(N), P) 
       if TL1 =/= empty .
-
   ceq chunkPath(F, step(Q, TL1, step(R, TL2, Rest)), N, P) = 
       (F << buildHeadArgs('A:Entity, 'B:Entity, P) >> :- 
        buildInvName(N) << buildHeadArgs('A:Entity, 'C:Entity, P) >> & 
@@ -129,12 +137,6 @@ fmod ILP-SEARCH is
   eq $evalPI(P, A, B, TS, Depth, MaxD, emptyPL) = searchPI(P, A, B, TS, Depth + 1, MaxD) .
   eq $evalPI(P, A, B, TS, Depth, MaxD, PL) = PL [owise] .
 
-  op isList : Term -> Bool .
-  eq isList('`[_`][T]) = true . eq isList(T) = false [owise] .
-  op getHeadVal : Term -> Term .
-  eq getHeadVal('`[_`]['_;_[T1, T2]]) = T1 . eq getHeadVal('`[_`][T1]) = T1 .
-  eq getHeadVal(T) = T [owise] .
-
   op $induceNewRule : Term TermList TermList TermSet ILPClauseSet TermList ILPClauseSet -> ILPClauseSet .
   eq $induceNewRule(P, POS, NEG, TS, CS, MRs, emptyClauseSet) = 
      $fallbackPI(P, POS, NEG, TS, CS, MRs, searchPI(P, getInput(P), getOutput(P), TS, 2, MAX-DEPTH)) .
@@ -142,9 +144,10 @@ fmod ILP-SEARCH is
 
   op $fallbackPI : Term TermList TermList TermSet ILPClauseSet TermList PathList -> ILPClauseSet .
   eq $fallbackPI(P, POS, NEG, TS, CS, MRs, Pth || PL) = chunkPath(func(P), Pth, 1, P) .
+  
   eq $fallbackPI(P, POS, NEG, TS, CS, MRs, emptyPL) = 
-     if isList(getInput(P)) and (ibk =/= 'none)
-     then $handleInnerPI(P, POS, NEG, TS, CS, MRs, searchPI(P, getHeadVal(getInput(P)), getHeadVal(getOutput(P)), TS, 2, MAX-DEPTH))
+     if hasInnerTask(getInput(P)) and (ibk =/= 'none)
+     then $handleInnerPI(P, POS, NEG, TS, CS, MRs, searchPI(P, extractInnerInput(getInput(P)), extractInnerOutput(getOutput(P)), TS, 2, MAX-DEPTH))
      else emptyClauseSet fi .
 
   op $handleInnerPI : Term TermList TermList TermSet ILPClauseSet TermList PathList -> ILPClauseSet .
@@ -156,6 +159,7 @@ fmod ILP-SEARCH is
 
   op simplifyCS : ILPClauseSet -> ILPClauseSet .
   eq simplifyCS(CS) = $simplify(CS, emptyClauseSet) .
+  
   op $simplify : ILPClauseSet ILPClauseSet -> ILPClauseSet .
   eq $simplify(emptyClauseSet, AccCS) = AccCS .
   ceq $simplify(C1 ++ CS, C2 ++ AccCS) = $simplify(CS, C2 ++ AccCS) if C1 == C2 .
@@ -173,3 +177,5 @@ fmod ILP-SEARCH is
   ceq coversAnyNEG(C, (NegEx, NEG), TS) = true if isCovered(NegEx, C, TS) .
   eq coversAnyNEG(C, (NegEx, NEG), TS) = coversAnyNEG(C, NEG, TS) [owise] .
 endfm
+
+
