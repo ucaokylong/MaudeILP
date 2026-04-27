@@ -15,7 +15,6 @@ fmod GRANDPARENT-ILP-NEW2 is
     mother(ann,   amy)
     mother(ann,   andy)
     mother(amy,   amelia)
-    mother(amy,   bob)
     mother(linda, gavin)
     father(steve, amy)
     father(steve, andy)
@@ -27,10 +26,9 @@ fmod GRANDPARENT-ILP-NEW2 is
     grandparent(ann,   amelia)
     grandparent(steve, amelia)
     grandparent(steve, spongebob)
+    grandparent(ann,  spongebob)
     grandparent(linda, amelia) .
 
-  eq NEG =
-    grandparent(amy, amelia) .
 
   var P Q R : Pred .
   var A B C : Person .

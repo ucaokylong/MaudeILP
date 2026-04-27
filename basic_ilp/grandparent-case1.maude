@@ -1,0 +1,54 @@
+load METARULE.maude
+
+fmod GRANDPARENT-CASE1 is
+  protecting METARULE .
+
+  --- 1. Khai báo các đối tượng (Entities)
+  sort Person .
+  subsort Person < Entity .
+  ops a b c d e f g h i : -> Person [ctor] .
+
+  --- 2. Khai báo các vị từ (Predicates)
+  ops mother father target : Person Person -> Pred [ctor] .
+
+  --- 3. Background Knowledge (BK)
+  eq BK =
+    mother(i, a)
+    mother(c, f)
+    mother(c, g)
+    mother(f, h)
+    father(a, b)
+    father(a, c)
+    father(b, d)
+    father(b, e) .
+
+  --- 4. Ví dụ khẳng định (Positive Examples)
+  eq POS =
+    target(i, b)
+    target(i, c)
+    target(a, d)
+    target(a, e)
+    target(a, f)
+    target(a, g)
+    target(c, h) .
+
+  --- 5. Ví dụ phủ định (Negative Examples)
+  eq NEG =
+    target(a, b)
+    target(b, c)
+    target(c, d)
+    target(d, e)
+    target(e, f)
+    target(f, g)
+    target(g, h)
+    target(h, i) .
+
+  --- 6. Metarules (Giữ nguyên cú pháp có dấu cách để tránh lỗi parse)
+  var P Q R : Pred .
+  var A B C : Person .
+  
+  eq METARULES =
+    metarule([P | Q], [P : A,B], [Q : A,B])
+    metarule([P | Q | R], [P : A,B], [Q : A,C] [R : C,B]) [nonexec] .
+
+endfm

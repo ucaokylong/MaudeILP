@@ -1,0 +1,39 @@
+load ILP-SEARCH.maude
+load graph-connectedness.maude
+
+fmod TEST-SEARCH-GRAPH-CONNECTEDNESS is
+  protecting ILP-SEARCH .
+  protecting GRAPH-CONNECTEDNESS-CASE .
+  protecting META-LEVEL .
+
+  --- Thiết lập độ sâu tìm kiếm
+  eq MAX-DEPTH = 3 .
+
+  --- Lấy bối cảnh module GRAPH-CONNECTEDNESS-CASE để trích xuất dữ liệu
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('GRAPH-CONNECTEDNESS-CASE, false) .
+  
+  --- Trích xuất danh sách Positive Examples (target(e))
+  op POS-Data : -> TermList .
+  eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+  
+  --- Trích xuất danh sách Negative Examples (target(a), target(b), ...)
+  op NEG-Data : -> TermList . 
+  eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+  
+  --- Chuyển đổi Background Knowledge sang dạng Set để tra cứu O(1)
+  op BK-Data : -> TermSet . 
+  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+  
+  --- Trích xuất các khuôn mẫu Metarules
+  op MR-Data : -> TermList .
+  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+
+  --- Khởi động thuật toán ILP để tìm bộ luật
+  op Induced-Program : -> ILPClauseSet .
+  eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, MR-Data) .
+endfm
+
+--- BẬT ĐO THỜI GIAN VÀ CHẠY THỬ NGHIỆM
+set show timing on .
+reduce in TEST-SEARCH-GRAPH-CONNECTEDNESS : simulate(Induced-Program) .

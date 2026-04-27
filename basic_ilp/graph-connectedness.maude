@@ -1,0 +1,53 @@
+load METARULE.maude
+
+fmod GRAPH-CONNECTEDNESS-CASE is
+  protecting METARULE .
+
+  --- 1. KHAI BÁO THỰC THỂ (Các đỉnh trong đồ thị)
+  sort Node .
+  subsort Node < Entity .
+  ops a b c d : -> Node [ctor] .
+
+  --- 2. KHAI BÁO VỊ TỪ
+  --- edge: cạnh trực tiếp (dữ liệu nền)
+  --- target: có đường đi (mục tiêu cần học)
+  ops edge target : Node Node -> Pred [ctor] .
+
+  --- 3. BACKGROUND KNOWLEDGE (BK)
+  --- Đồ thị có một vòng lặp nhỏ giữa a và b
+  eq BK =
+    edge(a, b)
+    edge(b, c)
+    edge(c, d)
+    edge(b, a) .
+
+  --- 4. POSITIVE EXAMPLES (Các cặp đỉnh có thể đi tới nhau)
+  eq POS =
+    target(a, b)
+    target(b, c)
+    target(c, d)
+    target(b, a)
+    target(a, c)
+    target(a, d)
+    target(a, a)
+    target(b, d)
+    target(b, a)
+    target(b, b) .
+
+  --- 5. NEGATIVE EXAMPLES
+  --- Trong ví dụ này Metagol để trống, ta khai báo tập rỗng
+
+  --- 6. BIẾN CHO METARULES
+  var P Q R : Pred .
+  var A B C : Node .
+
+  --- 7. METARULES
+  --- ident:   P(A,B) :- Q(A,B)
+  --- chain:   P(A,B) :- Q(A,C), R(C,B)
+  --- tailrec: P(A,B) :- Q(A,C), P(C,B) (Đệ quy đuôi)
+  eq METARULES =
+    metarule([P | Q],     [P : A,B], [Q : A,B])
+    metarule([P | Q | R], [P : A,B], [Q : A,C] [R : C,B])
+    metarule([P | Q],     [P : A,B], [Q : A,C] [P : C,B]) [nonexec] .
+
+endfm
