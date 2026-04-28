@@ -5,7 +5,7 @@ fmod GRANDPARENT-ILP-NEW2 is
 
   sort Person .
   subsort Person < Entity .
-  subsort Person < FirstOrderVar .
+  ---subsort Person < FirstOrderVar .
 
   ops ann amy andy bob steve linda gavin amelia spongebob : -> Person [ctor] .
 
@@ -15,21 +15,20 @@ fmod GRANDPARENT-ILP-NEW2 is
     mother(ann,   amy)
     mother(ann,   andy)
     mother(amy,   amelia)
-    mother(amy,   bob)
     mother(linda, gavin)
     father(steve, amy)
     father(steve, andy)
     father(andy,  spongebob)
     father(gavin, amelia) .
 
+
   eq POS =
     grandparent(ann,   amelia)
     grandparent(steve, amelia)
     grandparent(steve, spongebob)
+    grandparent(ann,  spongebob)
     grandparent(linda, amelia) .
 
-  eq NEG =
-    grandparent(amy, amelia) .
 
   var P Q R : Pred .
   var A B C : Person .
@@ -42,3 +41,4 @@ fmod GRANDPARENT-ILP-NEW2 is
     metarule([P | Q | R], [P : A,B], [Q : A,C] [R : C,B]) [nonexec] .
 
 endfm
+

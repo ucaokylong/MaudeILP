@@ -15,4 +15,6 @@ fmod METAVAR is
   sort FirstOrderVar .
   subsort Entity < FirstOrderVar .
 
+  subsort SecondOrderVar < FirstOrderVar .
+
 endfm

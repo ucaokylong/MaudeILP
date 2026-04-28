@@ -1,0 +1,32 @@
+load ILP-SEARCH.maude
+load head-tail-case.maude
+
+fmod TEST-SEARCH-HEAD-TAIL is
+  protecting ILP-DISPLAY .
+  protecting HEAD-TAIL-CASE .
+  protecting META-LEVEL .
+
+  eq MAX-DEPTH = 5 .
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('HEAD-TAIL-CASE, false) .
+  
+  op POS-Data : -> TermList .
+  eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+  
+  op NEG-Data : -> TermList . 
+  eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+  
+  op BK-Data : -> TermSet . 
+  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+  
+  op MR-Data : -> TermList .
+  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+
+  op Induced-Program : -> ILPClauseSet .
+  --- Đã xóa emptyClauseSet, chỉ còn 4 tham số
+  eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, MR-Data) .
+endfm
+
+--- LỆNH THỰC THI PHẢI NẰM SAU ENDFM
+set show timing on .
+reduce in TEST-SEARCH-HEAD-TAIL : simulate(Induced-Program) .

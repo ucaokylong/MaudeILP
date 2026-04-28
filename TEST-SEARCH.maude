@@ -1,0 +1,32 @@
+load ILP-SEARCH.maude
+load grandparent-ilp-new2.maude
+
+fmod TEST-SEARCH is
+  protecting ILP-DISPLAY .
+  protecting GRANDPARENT-ILP-NEW2 .
+  protecting META-LEVEL .
+
+  eq MAX-DEPTH = 5 .
+  op M-PROB : -> [Module] .
+  eq M-PROB = upModule('GRANDPARENT-ILP-NEW2, false) .
+  
+  op POS-Data : -> TermList .
+  eq POS-Data = flattenList(getEqRhs(M-PROB, 'POS)) .
+  
+  op NEG-Data : -> TermList . 
+  eq NEG-Data = flattenList(getEqRhs(M-PROB, 'NEG)) .
+  
+  op BK-Data : -> TermSet . 
+  eq BK-Data = listToSet(flattenList(getEqRhs(M-PROB, 'BK))) .
+  
+  op MR-Data : -> TermList .
+  eq MR-Data  = flattenList(getEqRhs(M-PROB, 'METARULES)) .
+
+  op Induced-Program : -> ILPClauseSet .
+  --- Đã xóa emptyClauseSet, chỉ còn 4 tham số
+  eq Induced-Program = learn(POS-Data, NEG-Data, BK-Data, MR-Data) .
+endfm
+
+--- LỆNH NÀY PHẢI NẰM NGOÀI ENDFM
+set show timing on .
+reduce in TEST-SEARCH : simulate(Induced-Program) .

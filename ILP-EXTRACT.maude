@@ -3,267 +3,96 @@ load METARULE.maude
 fmod ILP-EXTRACT is
   protecting METARULE .
   protecting META-LEVEL .
+  protecting CONVERSION .
 
-  --- ============================================================
-  --- PHAN 1: TIEN ICH TREN TERMLIST (meta-level)
-  --- ============================================================
+  vars T T1 T2 : Term . vars TL TL1 TL2 : TermList . vars M : [Module] . 
+  vars Q Q1 Q2 : Qid . vars EqS : EquationSet . vars ODS : OpDeclSet .
+  vars TY : Type . vars AS : AttrSet . vars TYL : TypeList .
+  vars N : Nat . vars S : String .
 
-  op headTL : TermList -> Term .
-  eq headTL((T:Term, TL:TermList)) = T:Term .
-  eq headTL(T:Term)                = T:Term [owise] .
+  sort ILP-QidSet . subsort Qid < ILP-QidSet .
+  op emptySet : -> ILP-QidSet [ctor] .
+  op _|_ : ILP-QidSet ILP-QidSet -> ILP-QidSet [ctor assoc comm id: emptySet] .
+  eq Q | Q = Q .
 
-  op tailTL : TermList -> TermList .
-  eq tailTL((T:Term, TL:TermList)) = TL:TermList .
-  eq tailTL(T:Term)                = empty [owise] .
+  op qidToConst : Qid Type -> Constant .
+  eq qidToConst(Q, TY) = qid(string(Q) + "." + string(TY)) .
 
-  op lengthTL : TermList -> Nat .
-  eq lengthTL(empty)                 = 0 .
-  eq lengthTL(T:Term)                = 1 [owise] .
-  eq lengthTL((T:Term, TL:TermList)) = s(lengthTL(TL:TermList)) .
+  op setToTermList : ILP-QidSet Type -> TermList .
+  eq setToTermList(emptySet, TY) = empty .
+  eq setToTermList(Q | QS:ILP-QidSet, TY) = qidToConst(Q, TY), setToTermList(QS:ILP-QidSet, TY) .
 
-  op nthTL : TermList Nat -> Term .
-  eq nthTL((T:Term, TL:TermList), 0)        = T:Term .
-  eq nthTL(T:Term,                0)        = T:Term [owise] .
-  eq nthTL((T:Term, TL:TermList), s(N:Nat)) = nthTL(TL:TermList, N:Nat) .
+  op beforeDot : String -> String .
+  eq beforeDot(S) = if find(S, ".", 0) == notFound then S else substr(S, 0, find(S, ".", 0)) fi .
 
-  op inTL : Term TermList -> Bool .
-  eq inTL(T:Term, empty)                  = false .
-  eq inTL(T:Term, (T:Term, TL:TermList))  = true .
-  eq inTL(T:Term, (T2:Term, TL:TermList)) = inTL(T:Term, TL:TermList) [owise] .
+  op getName : Term -> Qid .
+  eq getName(C:Constant) = qid(beforeDot(string(C:Constant))) .
+  eq getName(V:Variable) = qid(beforeDot(string(V:Variable))) .
+  eq getName(T) = 'nil [owise] .
 
-  op appendTL : TermList TermList -> TermList .
-  eq appendTL(empty, TL:TermList)                   = TL:TermList .
-  eq appendTL(T:Term, TL:TermList)                  = (T:Term, TL:TermList) [owise] .
-  eq appendTL((T:Term, TL1:TermList), TL2:TermList) =
-     (T:Term, appendTL(TL1:TermList, TL2:TermList)) .
+  op countArity : TypeList -> Nat .
+  eq countArity(nil) = 0 .
+  eq countArity(TY TYL) = 1 + countArity(TYL) .
 
-  --- ============================================================
-  --- PHAN 2: TRICH XUAT FUNCTOR VA ARGUMENTS
-  --- object-level f(t1,...,tn) --> meta-level 'f[t1,...,tn]
-  --- ============================================================
+  op getArity : [Module] Qid -> Nat .
+  op $getArity : OpDeclSet Qid -> Nat .
+  eq getArity(M, Q) = $getArity(getOps(M), Q) .
+  eq $getArity((op Q1 : TYL -> TY [AS] .) ODS, Q2) = 
+     if (Q1 == Q2) or (qid(beforeDot(string(Q1))) == Q2) then countArity(TYL) else $getArity(ODS, Q2) fi .
+  eq $getArity(none, Q2) = 0 .
 
-  op argsOf : Term -> TermList .
-  eq argsOf(F:Qid[TL:TermList]) = TL:TermList .
-  eq argsOf(C:Constant)         = empty .
+  op getAllPredsSet : [Module] -> ILP-QidSet .
+  op $getOpsByResult : OpDeclSet Qid -> ILP-QidSet .
+  eq getAllPredsSet(M) = $getOpsByResult(getOps(M), 'Pred) .
+  eq $getOpsByResult(none, Q2) = emptySet .
+  eq $getOpsByResult((op Q1 : TYL -> TY [AS] .) ODS, Q2) = if (qid(beforeDot(string(TY))) == Q2) then Q1 | $getOpsByResult(ODS, Q2) else $getOpsByResult(ODS, Q2) fi .
 
-  op functorOf : Term -> Qid .
-  eq functorOf(F:Qid[TL:TermList]) = F:Qid .
-  eq functorOf(C:Constant)         = getName(C:Constant) .
+  op filterSetByArity : ILP-QidSet [Module] Nat -> ILP-QidSet .
+  eq filterSetByArity(emptySet, M, N) = emptySet .
+  eq filterSetByArity(Q | QS:ILP-QidSet, M, N) = if getArity(M, Q) == N then Q | filterSetByArity(QS:ILP-QidSet, M, N) else filterSetByArity(QS:ILP-QidSet, M, N) fi .
 
-  op arityOf : Term -> Nat .
-  eq arityOf(T:Term) = lengthTL(argsOf(T:Term)) .
+  op filterSetByPresence : ILP-QidSet ILP-QidSet -> ILP-QidSet .
+  eq filterSetByPresence(emptySet, QS2:ILP-QidSet) = emptySet .
+  eq filterSetByPresence(Q | QS1:ILP-QidSet, QS2:ILP-QidSet) = if isMember(Q, QS2:ILP-QidSet) then Q | filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) else filterSetByPresence(QS1:ILP-QidSet, QS2:ILP-QidSet) fi .
+  op isMember : Qid ILP-QidSet -> Bool .
+  eq isMember(Q, Q | QS:ILP-QidSet) = true . eq isMember(Q1, QS:ILP-QidSet) = false [owise] .
 
-  --- ============================================================
-  --- PHAN 3: TRICH XUAT SECONDORDERVARLIST
-  --- [P | Q | R] o object-level
-  --- meta-level: '_|_['_|_[P,Q],R] hoac tuong tu
-  --- Lay danh sach cac SecondOrderVar
-  --- ============================================================
+  op getEntities : [Module] -> TermList .
+  op $extractEntities : OpDeclSet -> ILP-QidSet .
+  eq getEntities(M) = setToTermList($extractEntities(getOps(M)), 'Entity) .
+  eq $extractEntities(none) = emptySet .
+  eq $extractEntities((op Q1 : TYL -> TY [AS] .) ODS) = if (TYL == nil) and (qid(beforeDot(string(TY))) =/= 'Pred) then Q1 | $extractEntities(ODS) else $extractEntities(ODS) fi .
 
-  --- Tach SecondOrderVarList thanh TermList phang
-  op flattenSOVL : Term -> TermList .
-  eq flattenSOVL(T:Term) =
-     if functorOf(T:Term) == '_|_
-     then appendTL(flattenSOVL(headTL(argsOf(T:Term))),
-                   flattenSOVL(nthTL(argsOf(T:Term), 1)))
-     else T:Term
-     fi .
+  op getTargetPreds : [Module] -> TermList .
+  eq getTargetPreds(M) = setToTermList(filterSetByPresence(getAllPredsSet(M), (getPredsInData(flattenList(getEqRhs(M, 'POS))) | getPredsInData(flattenList(getEqRhs(M, 'NEG))))), 'Pred) .
 
-  --- Lay SecondOrderVarList tu metarule term
-  --- metarule(SOVL, Head, Body) -> argsOf -> [SOVL, Head, Body]
-  op mrSOVL : Term -> Term .
-  eq mrSOVL(MR:Term) = headTL(argsOf(MR:Term)) .
+  op getBKPreds : [Module] -> TermList .
+  eq getBKPreds(M) = setToTermList(filterSetByPresence(getAllPredsSet(M), getPredsInData(flattenList(getEqRhs(M, 'BK)))), 'Pred) .
 
-  --- Lay danh sach SecondOrderVars duoi dang TermList phang
-  op mrPredVars : Term -> TermList .
-  eq mrPredVars(MR:Term) =
-     flattenSOVL(headTL(argsOf(mrSOVL(MR:Term)))) .
+  op getPredsByArity : [Module] Nat -> TermList .
+  eq getPredsByArity(M, N) = setToTermList(filterSetByArity(getAllPredsSet(M), M, N), 'Pred) .
 
-  --- ============================================================
-  --- PHAN 4: TRICH XUAT METALITERAL (HEAD)
-  --- [P : A,B] o object-level
-  --- meta-level: '_:_[P, '_`,_[A,B]] hoac tuong tu
-  --- ============================================================
+  op getFunctor : Term -> Qid .
+  eq getFunctor(Q:Qid[TL]) = Q:Qid . eq getFunctor(Q:Qid) = Q:Qid [owise] .
+  op getPredsInData : TermList -> ILP-QidSet .
+  eq getPredsInData(empty) = emptySet . eq getPredsInData((T, TL)) = getFunctor(T) | getPredsInData(TL) . eq getPredsInData(T) = getFunctor(T) [owise] .
+  op getEqRhs : [Module] Qid -> Term . eq getEqRhs(M, Q) = $getEqRhs(getEqs(M), Q) .
+  op $getEqRhs : EquationSet Qid -> Term . eq $getEqRhs((eq T1 = T2 [AS] .) EqS, Q) = if (T1 == Q) or (beforeDot(string(getName(T1))) == string(Q)) then T2 else $getEqRhs(EqS, Q) fi .
+  eq $getEqRhs(none, Q) = empty .
+  op flattenList : Term -> TermList . eq flattenList(empty) = empty .
+  eq flattenList(T) = $flatten(T, empty) .
+  op $flatten : Term TermList -> TermList .
+  eq $flatten(F:Qid[TL], Acc:TermList) = if F:Qid == '__ or F:Qid == '_`,_ or F:Qid == 'nil then $flattenTL(TL, Acc:TermList) else (F:Qid[TL], Acc:TermList) fi .
+  eq $flatten(T, Acc:TermList) = (T, Acc:TermList) [owise] .
+  op $flattenTL : TermList TermList -> TermList .
+  eq $flattenTL(empty, Acc:TermList) = Acc:TermList . eq $flattenTL((T, TL), Acc:TermList) = $flatten(T, $flattenTL(TL, Acc:TermList)) .
+  
+  op extractMetarules : Term -> TermList .
+  eq extractMetarules('__[TL:TermList]) = TL:TermList .
+  eq extractMetarules('nilMR.MetaruleList) = empty .
+  eq extractMetarules(T:Term) = T:Term [owise] .
 
-  --- Lay Head MetaLiteral term tu metarule
-  op mrHead : Term -> Term .
-  eq mrHead(MR:Term) = nthTL(argsOf(MR:Term), 1) .
-
-  --- Lay SecondOrderVar cua MetaLiteral (truoc dau :)
-  op mlPredVar : Term -> Term .
-  eq mlPredVar(ML:Term) = headTL(argsOf(ML:Term)) .
-
-  --- Lay FirstOrderVarList cua MetaLiteral (sau dau :)
-  op mlArgVars : Term -> Term .
-  eq mlArgVars(ML:Term) = nthTL(argsOf(ML:Term), 1) .
-
-  --- Tach FirstOrderVarList thanh TermList phang
-  op flattenFOVL : Term -> TermList .
-  eq flattenFOVL(T:Term) =
-     if functorOf(T:Term) == '_`,_
-     then appendTL(flattenFOVL(headTL(argsOf(T:Term))),
-                   flattenFOVL(nthTL(argsOf(T:Term), 1)))
-     else T:Term
-     fi .
-
-  --- Lay danh sach FirstOrderVars cua MetaLiteral duoi dang TermList phang
-  op mlArgVarList : Term -> TermList .
-  eq mlArgVarList(ML:Term) = flattenFOVL(mlArgVars(ML:Term)) .
-
-  --- Lay arity cua MetaLiteral (so FirstOrderVars)
-  op mlArity : Term -> Nat .
-  eq mlArity(ML:Term) = lengthTL(mlArgVarList(ML:Term)) .
-
-  --- Lay FirstOrderVar thu N (0-indexed)
-  op mlArgN : Term Nat -> Term .
-  eq mlArgN(ML:Term, N:Nat) = nthTL(mlArgVarList(ML:Term), N:Nat) .
-
-  --- ============================================================
-  --- PHAN 5: TRICH XUAT METABODY
-  --- [Q:A,C] [R:C,B] o object-level (LIST separator = dau cach)
-  --- meta-level: '__[ML1, ML2] hoac tuong tu
-  --- ============================================================
-
-  --- Lay MetaBody term tu metarule
-  op mrBody : Term -> Term .
-  eq mrBody(MR:Term) = nthTL(argsOf(MR:Term), 2) .
-
-  --- Tach MetaBody thanh TermList cac MetaLiteral phang
-  op flattenBody : Term -> TermList .
-  eq flattenBody(T:Term) =
-     if functorOf(T:Term) == '__
-     then appendTL(flattenBody(headTL(argsOf(T:Term))),
-                   flattenBody(nthTL(argsOf(T:Term), 1)))
-     else T:Term
-     fi .
-
-  --- Lay danh sach MetaLiterals cua body duoi dang TermList
-  op mrBodyLiterals : Term -> TermList .
-  eq mrBodyLiterals(MR:Term) = flattenBody(mrBody(MR:Term)) .
-
-  --- Lay MetaLiteral thu N cua body (0-indexed)
-  op mrBodyN : Term Nat -> Term .
-  eq mrBodyN(MR:Term, N:Nat) = nthTL(mrBodyLiterals(MR:Term), N:Nat) .
-
-  --- Lay so luong MetaLiterals trong body
-  op mrBodyLen : Term -> Nat .
-  eq mrBodyLen(MR:Term) = lengthTL(mrBodyLiterals(MR:Term)) .
-
-  --- Tong so literals (head + body)
-  op mrSize : Term -> Nat .
-  eq mrSize(MR:Term) = s(mrBodyLen(MR:Term)) .
-
-  --- ============================================================
-  --- PHAN 6: PHAN TICH SHARING PATTERN
-  --- Nen tang de engine hieu cau truc logic cua metarule
-  --- Doc lap voi ten bien
-  ---
-  --- Dung cho:
-  ---   - Rang buoc khi instantiate
-  ---   - Pruning hypothesis sai cau truc
-  ---   - Admissibility check
-  ---   - Phat hien: identity, chain, recursive
-  --- ============================================================
-
-  op sameVar : Term Term -> Bool .
-  eq sameVar(T:Term, T:Term) = true .
-  eq sameVar(T1:Term, T2:Term) = false [owise] .
-
-  --- PredVar cua hai MetaLiterals co giong nhau khong
-  --- Dung cho: phat hien recursive metarule
-  op samePredVar : Term Term -> Bool .
-  eq samePredVar(ML1:Term, ML2:Term) =
-     sameVar(mlPredVar(ML1:Term), mlPredVar(ML2:Term)) .
-
-  --- ArgVar thu N cua ML1 == ArgVar thu M cua ML2?
-  --- Dung cho: xac dinh rang buoc sharing giua cac literal
-  op sharesArgVar : Term Nat Term Nat -> Bool .
-  eq sharesArgVar(ML1:Term, N:Nat, ML2:Term, M:Nat) =
-     sameVar(mlArgN(ML1:Term, N:Nat), mlArgN(ML2:Term, M:Nat)) .
-
-  --- Head va Body[I] co share ArgVar tai vi tri N, M khong
-  --- Dung cho: phat hien identity/chain tu head
-  op headBodyShares : Term Nat Nat Nat -> Bool .
-  eq headBodyShares(MR:Term, I:Nat, N:Nat, M:Nat) =
-     sharesArgVar(mrHead(MR:Term), N:Nat,
-                  mrBodyN(MR:Term, I:Nat), M:Nat) .
-
-  --- Body[I] va Body[J] co share ArgVar tai vi tri N, M khong
-  --- Dung cho: phat hien chain linking qua bien trung gian
-  op bodyBodyShares : Term Nat Nat Nat Nat -> Bool .
-  eq bodyBodyShares(MR:Term, I:Nat, J:Nat, N:Nat, M:Nat) =
-     sharesArgVar(mrBodyN(MR:Term, I:Nat), N:Nat,
-                  mrBodyN(MR:Term, J:Nat), M:Nat) .
-
-  --- ============================================================
-  --- PHAN 7: TRICH XUAT PRED OBJECT-LEVEL
-  --- mother(ann,amy) o object-level
-  --- meta-level: 'mother['ann.Person,'amy.Person]
-  --- ============================================================
-
-  --- Lay Pred term cua mot fact
-  op factPred : Term -> Term .
-  eq factPred(A:Term) = functorOf(A:Term) .
-
-  --- Lay danh sach Entity arguments cua mot fact
-  op factEntities : Term -> TermList .
-  eq factEntities(A:Term) = argsOf(A:Term) .
-
-  --- Lay arity cua fact
-  op factArity : Term -> Nat .
-  eq factArity(A:Term) = lengthTL(factEntities(A:Term)) .
-
-  --- Lay Entity thu N (0-indexed)
-  op factEntityN : Term Nat -> Term .
-  eq factEntityN(A:Term, N:Nat) = nthTL(factEntities(A:Term), N:Nat) .
-
-  --- Kiem tra arity cua MetaLiteral co khop voi fact khong
-  --- Dung cho: pruning som truoc khi match
-  op arityMatch : Term Term -> Bool .
-  eq arityMatch(ML:Term, A:Term) =
-     (mlArity(ML:Term) == factArity(A:Term)) .
-
-  --- ============================================================
-  --- PHAN 8: SUBSTITUTION
-  --- Bind SecondOrderVar/FirstOrderVar -> gia tri cu the
-  --- P -> mother, A -> ann, B -> amy
-  ---
-  --- Dung cho:
-  ---   - Instantiate metarule thanh clause cu the
-  ---   - Consistency check khi matching
-  ---   - Backtracking khi conflict
-  ---   - Predicate invention
-  --- ============================================================
-
-  sort Binding .
-  op bind : Term Term -> Binding [ctor] .
-
-  sort Subst .
-  op emptySubst : -> Subst [ctor] .
-  op _::_ : Binding Subst -> Subst [ctor assoc id: emptySubst] .
-
-  op lookupSubst : Term Subst -> Term .
-  eq lookupSubst(T:Term, emptySubst)                        = T:Term .
-  eq lookupSubst(T:Term, (bind(T:Term, V:Term) :: S:Subst)) = V:Term .
-  eq lookupSubst(T:Term, (bind(T2:Term,V:Term) :: S:Subst))
-     = lookupSubst(T:Term, S:Subst) [owise] .
-
-  op isBound : Term Subst -> Bool .
-  eq isBound(T:Term, emptySubst)                        = false .
-  eq isBound(T:Term, (bind(T:Term, V:Term) :: S:Subst)) = true .
-  eq isBound(T:Term, (bind(T2:Term,V:Term) :: S:Subst))
-     = isBound(T:Term, S:Subst) [owise] .
-
-  --- Them rang buoc:
-  --- Chua bind        -> them vao
-  --- Da bind == V     -> consistent, giu nguyen
-  --- Da bind =/= V    -> conflict -> emptySubst (trigger backtrack)
-  op extendSubst : Term Term Subst -> Subst .
-  eq extendSubst(T:Term, V:Term, S:Subst) =
-     if isBound(T:Term, S:Subst)
-     then if lookupSubst(T:Term, S:Subst) == V:Term
-          then S:Subst
-          else emptySubst
-          fi
-     else bind(T:Term, V:Term) :: S:Subst
-     fi .
+  op getMetarules : [Module] -> TermList . eq getMetarules(M) = flattenList(getEqRhs(M, 'METARULES)) .
+  
+ 
+endfm

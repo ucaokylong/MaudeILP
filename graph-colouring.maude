@@ -1,0 +1,54 @@
+load METARULE.maude
+
+fmod GRAPH-COLOURING-CASE is
+  protecting METARULE .
+
+  --- 1. KHAI BÁO THỰC THỂ (Nodes và Colours)
+  sort Node .
+  subsort Node < Entity .
+  ops a b c d e f red green : -> Node [ctor] .
+
+  --- 2. KHAI BÁO VỊ TỪ
+  --- edge và colour là binary (2 tham số)
+  --- target là unary (1 tham số)
+  ops edge colour : Node Node -> Pred [ctor] .
+  op target : Node -> Pred [ctor] .
+
+  --- 3. BACKGROUND KNOWLEDGE (BK)
+  eq BK =
+    edge(a, b)
+    edge(b, c)
+    edge(b, d)
+    edge(c, e)
+    edge(e, f)
+    colour(a, green)
+    colour(b, red)
+    colour(c, green)
+    colour(d, green)
+    colour(e, red)
+    colour(f, red) .
+
+  --- 4. POSITIVE EXAMPLES
+  eq POS =
+    target(e) .
+
+  --- 5. NEGATIVE EXAMPLES
+  eq NEG =
+    target(a)
+    target(b)
+    target(c)
+    target(d)
+    target(f) .
+
+  --- 6. BIẾN CHO METARULES
+  var P Q R : Pred .
+  var A B C : Node .
+
+  --- 7. METARULES
+  --- Rule 1: P(A) :- Q(A,B), R(A,B)  (Mục tiêu unary, thân binary)
+  --- Rule 2: P(A,B) :- Q(A,C), R(B,C) (Mục tiêu binary, thân binary)
+  eq METARULES =
+    metarule([P | Q | R], [P : A], [Q : A,B] [R : A,B])
+    metarule([P | Q | R], [P : A,B], [Q : A,C] [R : B,C]) [nonexec] .
+
+endfm
