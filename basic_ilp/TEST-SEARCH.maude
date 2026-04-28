@@ -2,7 +2,7 @@ load ILP-SEARCH.maude
 load grandparent-ilp-new2.maude
 
 fmod TEST-SEARCH is
-  protecting ILP-SEARCH .
+  protecting ILP-DISPLAY .
   protecting GRANDPARENT-ILP-NEW2 .
   protecting META-LEVEL .
 

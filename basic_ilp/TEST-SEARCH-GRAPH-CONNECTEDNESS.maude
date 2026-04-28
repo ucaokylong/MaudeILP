@@ -2,7 +2,7 @@ load ILP-SEARCH.maude
 load graph-connectedness.maude
 
 fmod TEST-SEARCH-GRAPH-CONNECTEDNESS is
-  protecting ILP-SEARCH .
+  protecting ILP-DISPLAY .
   protecting GRAPH-CONNECTEDNESS-CASE .
   protecting META-LEVEL .
 

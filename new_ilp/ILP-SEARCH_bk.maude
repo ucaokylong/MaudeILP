@@ -1,0 +1,154 @@
+load ILP-CORE-ENGINE.maude
+
+fmod ILP-SEARCH is
+  protecting ILP-DISPLAY .
+
+  --- Maximum allowed depth for recursion to prevent combinatorial explosion
+  op MAX-DEPTH : -> Nat .
+  eq MAX-DEPTH = 3 .
+
+  vars P Goal MR MetaLit NegEx : Term .
+  vars POS NEG MRs RestGoals NewGoals RestNEG : TermList .
+  vars TS : TermSet .
+  vars C : ILPClause .
+  vars CS : ILPClauseSet .
+  vars Phase1Res : SearchNodeSet . 
+  vars Depth N N' : Nat .
+  vars E : Env . vars ES : EnvSet .
+  vars Node : SearchNode . vars RestNodes : SearchNodeSet .
+  vars BB : BoundBody . vars HasAbduced : Bool .
+  vars RestRes : AbductResSet .
+
+  --- =========================================================================
+  --- DATA STRUCTURE: SEARCH NODES
+  --- =========================================================================
+  sort SearchNode SearchNodeSet .
+  subsort SearchNode < SearchNodeSet .
+  
+  op emptyNodeSet : -> SearchNodeSet [ctor] .
+  op _++_ : SearchNodeSet SearchNodeSet -> SearchNodeSet [ctor assoc comm idem id: emptyNodeSet] .
+  op node : TermList ILPClauseSet Nat Nat -> SearchNode [ctor] .
+
+  --- =========================================================================
+  --- COVERAGE EVALUATION & EARLY PRUNING (NEGATIVE CHECKING)
+  --- =========================================================================
+  op isCovered : Term ILPClauseSet TermSet -> Bool .
+  eq isCovered(P, CS, TS) = if (P \in TS) then true else isProvable(P, CS, TS) fi .
+  
+  op isSafeFromNEG : TermList ILPClauseSet TermSet -> Bool .
+  eq isSafeFromNEG(empty, CS, TS) = true .
+  ceq isSafeFromNEG((NegEx, RestNEG), CS, TS) = false 
+    if isProvable(NegEx, CS, TS) == true .
+  eq isSafeFromNEG((NegEx, RestNEG), CS, TS) = isSafeFromNEG(RestNEG, CS, TS) [owise] .
+
+  --- =========================================================================
+  --- MAIN ALGORITHM: META-INTERPRETIVE LEARNING
+  --- =========================================================================
+  op learn : TermList TermList TermSet TermList -> ILPClauseSet .
+  
+  --- Pass NEG constraint deep into the searchMIL engine for immediate pruning
+  eq learn(POS, NEG, TS, MRs) = 
+      filterNodes( searchMIL( node(POS, emptyClauseSet, MAX-DEPTH, 1), TS, MRs, NEG ), NEG, TS ) .
+      
+  op searchMIL : SearchNodeSet TermSet TermList TermList -> SearchNodeSet .
+  eq searchMIL(emptyNodeSet, TS, MRs, NEG) = emptyNodeSet .
+  
+  --- [SHORT-CIRCUIT OPTIMIZATION]: If a valid and safe terminal node is reached, discard all other branches
+  ceq searchMIL(node(empty, CS, Depth, N) ++ RestNodes, TS, MRs, NEG) = 
+      node(empty, CS, Depth, N) 
+   if isSafeFromNEG(NEG, CS, TS) == true .
+   
+  --- If a terminal node violates NEG, discard it and continue searching
+  eq searchMIL(node(empty, CS, Depth, N) ++ RestNodes, TS, MRs, NEG) = 
+      searchMIL(RestNodes, TS, MRs, NEG) [owise] .
+      
+  --- [PRUNING]: Terminate paths that exceed the maximum defined depth
+  eq searchMIL(node((Goal, RestGoals), CS, 0, N) ++ RestNodes, TS, MRs, NEG) = 
+      searchMIL(RestNodes, TS, MRs, NEG) .
+      
+  --- [COVERAGE SKIP OPTIMIZATION]: Skip expanding goals already satisfied by BK or CS
+  ceq searchMIL(node((Goal, RestGoals), CS, Depth, N) ++ RestNodes, TS, MRs, NEG) = 
+      searchMIL(node(RestGoals, CS, Depth, N) ++ RestNodes, TS, MRs, NEG)
+   if isCovered(Goal, CS, TS) == true .
+   
+  eq searchMIL(node((Goal, RestGoals), CS, Depth, N) ++ RestNodes, TS, MRs, NEG) = 
+      searchMIL( expandGoal(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) ++ RestNodes, TS, MRs, NEG ) [owise] .
+      
+  op expandGoal : Term TermList ILPClauseSet Nat Nat TermSet TermList TermList -> SearchNodeSet .
+  ceq expandGoal(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) = Phase1Res
+      if Phase1Res := tryPureBK(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG)
+      /\ Phase1Res =/= emptyNodeSet .
+  eq expandGoal(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) = 
+      tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) [owise] .
+
+  --- =========================================================================
+  --- PHASE 1: PURE BK MATCHING (SUPPORTING RECURSION)
+  --- =========================================================================
+  op tryPureBK : Term TermList ILPClauseSet Nat Nat TermSet TermList TermList -> SearchNodeSet .
+  eq tryPureBK(Goal, RestGoals, CS, Depth, N, TS, empty, NEG) = emptyNodeSet .
+  
+  ceq tryPureBK(Goal, RestGoals, CS, Depth, N, TS, (MR, MRs), NEG) = 
+      buildNodesFromEnv(MR, ES, RestGoals, CS, Depth, N, TS, NEG) ++ 
+      tryPureBK(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG)
+   if E := matchLiteral(getHead(MR), Goal, emptyEnv)
+   /\ E =/= failEnv
+   --- [FIX]: Uses proveGoals to search BOTH ClauseSet (CS) and TermSet (TS) for enabling recursive learning.
+   /\ ES := proveGoals(extractLiterals(getBody(MR)), E, CS, TS) .
+   
+  eq tryPureBK(Goal, RestGoals, CS, Depth, N, TS, (MR, MRs), NEG) = 
+      tryPureBK(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) [owise] .
+      
+  op buildNodesFromEnv : Term EnvSet TermList ILPClauseSet Nat Nat TermSet TermList -> SearchNodeSet .
+  eq buildNodesFromEnv(MR, emptyEnvSet, RestGoals, CS, Depth, N, TS, NEG) = emptyNodeSet .
+  
+  --- [STRICT GUARD]: Generated rules must immediately clear the NEG check to prevent invalid branch expansion
+  ceq buildNodesFromEnv(MR, E ++ ES, RestGoals, CS, Depth, N, TS, NEG) = 
+      node(RestGoals, CS ++ instantiate(MR, E), sd(Depth, 1), N) ++ 
+      buildNodesFromEnv(MR, ES, RestGoals, CS, Depth, N, TS, NEG)
+   if isSafeFromNEG(NEG, CS ++ instantiate(MR, E), TS) == true .
+   
+  eq buildNodesFromEnv(MR, E ++ ES, RestGoals, CS, Depth, N, TS, NEG) = 
+      buildNodesFromEnv(MR, ES, RestGoals, CS, Depth, N, TS, NEG) [owise] .
+
+  --- =========================================================================
+  --- PHASE 2: PREDICATE INVENTION / ABDUCTION
+  --- =========================================================================
+  op tryAbductPI : Term TermList ILPClauseSet Nat Nat TermSet TermList TermList -> SearchNodeSet .
+  eq tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, empty, NEG) = emptyNodeSet .
+  
+  ceq tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, (MR, MRs), NEG) = 
+      buildNodesFromAbduct(MR, abduceBody(extractLiterals(getBody(MR)), E, TS, TS, N), RestGoals, CS, Depth, TS, NEG) ++
+      tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG)
+   if E := matchLiteral(getHead(MR), Goal, emptyEnv)
+   /\ E =/= failEnv .
+   
+  eq tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, (MR, MRs), NEG) = 
+      tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) [owise] .
+      
+  op buildNodesFromAbduct : Term AbductResSet TermList ILPClauseSet Nat TermSet TermList -> SearchNodeSet .
+  eq buildNodesFromAbduct(MR, emptyAbductSet, RestGoals, CS, Depth, TS, NEG) = emptyNodeSet .
+  
+  eq buildNodesFromAbduct(MR, [ E | NewGoals | BB | N' | false ] ++ RestRes, RestGoals, CS, Depth, TS, NEG) = 
+      buildNodesFromAbduct(MR, RestRes, RestGoals, CS, Depth, TS, NEG) .
+      
+  --- [STRICT GUARD]: Prevent bad abducted predicate rules
+  ceq buildNodesFromAbduct(MR, [ E | NewGoals | BB | N' | true ] ++ RestRes, RestGoals, CS, Depth, TS, NEG) = 
+      node(mergeGoals(NewGoals, RestGoals), CS ++ (instLit(getHead(MR), E) :- BB), sd(Depth, 1), N') ++ 
+      buildNodesFromAbduct(MR, RestRes, RestGoals, CS, Depth, TS, NEG)
+   if isSafeFromNEG(NEG, CS ++ (instLit(getHead(MR), E) :- BB), TS) == true .
+   
+  eq buildNodesFromAbduct(MR, [ E | NewGoals | BB | N' | true ] ++ RestRes, RestGoals, CS, Depth, TS, NEG) = 
+      buildNodesFromAbduct(MR, RestRes, RestGoals, CS, Depth, TS, NEG) [owise] .
+
+  --- =========================================================================
+  --- FINAL RESULT EXTRACTION
+  --- =========================================================================
+  op filterNodes : SearchNodeSet TermList TermSet -> ILPClauseSet .
+  eq filterNodes(emptyNodeSet, NEG, TS) = emptyClauseSet .
+  
+  --- SearchMIL prunes invalid nodes, so we simply extract the CS from the successful node
+  eq filterNodes(node(empty, CS, Depth, N), NEG, TS) = CS .
+  
+  --- Fallback to discard invalid nodes or malformed input
+  eq filterNodes(Node:SearchNode ++ RestNodes, NEG, TS) = filterNodes(RestNodes, NEG, TS) [owise] .
+endfm

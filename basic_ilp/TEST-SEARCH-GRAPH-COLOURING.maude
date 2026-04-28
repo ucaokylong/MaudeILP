@@ -2,7 +2,7 @@ load ILP-SEARCH.maude
 load graph-colouring.maude
 
 fmod TEST-SEARCH-GRAPH-COLOURING is
-  protecting ILP-SEARCH .
+  protecting ILP-DISPLAY .
   protecting GRAPH-COLOURING-CASE .
   protecting META-LEVEL .
 

@@ -1,154 +1,347 @@
-load ILP-CORE-ENGINE.maude
+load ILP-EXTRACT.maude
 
 fmod ILP-SEARCH is
-  protecting ILP-DISPLAY .
+  protecting ILP-EXTRACT .
+  protecting NAT .
 
-  --- Maximum allowed depth for recursion to prevent combinatorial explosion
+  --- =========================================================================
+  --- 1. DECLARATION
+  --- =========================================================================
   op MAX-DEPTH : -> Nat .
-  eq MAX-DEPTH = 3 .
+  eq MAX-DEPTH = 5 [owise] . 
 
-  vars P Goal MR MetaLit NegEx : Term .
-  vars POS NEG MRs RestGoals NewGoals RestNEG : TermList .
-  vars TS : TermSet .
-  vars C : ILPClause .
-  vars CS : ILPClauseSet .
-  vars Phase1Res : SearchNodeSet . 
-  vars Depth N N' : Nat .
-  vars E : Env . vars ES : EnvSet .
-  vars Node : SearchNode . vars RestNodes : SearchNodeSet .
-  vars BB : BoundBody . vars HasAbduced : Bool .
-  vars RestRes : AbductResSet .
+  sorts BoundLiteral BoundBody ILPClause ILPClauseSet .
+  subsort BoundLiteral < BoundBody .
+  subsort ILPClause < ILPClauseSet .
+  op _<<_>> : Qid TermList -> BoundLiteral [ctor prec 30] .
+  op emptyBB : -> BoundBody [ctor] .
+  op _&_ : BoundBody BoundBody -> BoundBody [ctor assoc id: emptyBB prec 40] .
+  op _:-_ : BoundLiteral BoundBody -> ILPClause [ctor prec 50] .
+  op emptyClauseSet : -> ILPClauseSet [ctor] .
+  op _++_ : ILPClauseSet ILPClauseSet -> ILPClauseSet [ctor assoc comm idem id: emptyClauseSet] .
+
+  sort TermSet .
+  subsort Term < TermSet .
+  op emptyTS : -> TermSet [ctor] .
+  op _U_ : TermSet TermSet -> TermSet [ctor assoc comm idem id: emptyTS] .
+
+  op _\in_ : Term TermSet -> Bool .
+  eq T:Term \in (T:Term U RestBK:TermSet) = true .
+  eq T:Term \in RestBK:TermSet = false [owise] .
+
+  op listToSet : TermList -> TermSet .
+  eq listToSet(empty) = emptyTS .
+  eq listToSet((T:Term, TL:TermList)) = T:Term U listToSet(TL:TermList) .
+  eq listToSet(T:Term) = T:Term [owise] .
+
+  sorts BindVal Bind Env Env? EnvSet .
+  subsorts Term Qid < BindVal .
+  subsort Bind < Env < Env? .
+  subsort Env < EnvSet .
+  op _->_ : Term BindVal -> Bind [ctor] .
+  op emptyEnv : -> Env [ctor] .
+  op _,_ : Env Env -> Env [ctor assoc comm id: emptyEnv] .
+  op failEnv : -> Env? [ctor] .
+  op emptyEnvSet : -> EnvSet [ctor] .
+  op _++_ : EnvSet EnvSet -> EnvSet [ctor assoc comm idem id: emptyEnvSet] .
+
+  --- DECLARATION OF VARIABLES
+  vars Goal Fact T V MR PredVar NewGoal NegEx V1 V2 V3 MetaLit : Term .
+  vars POS NEG Metarules TL TL1 TL2 Args AllMRs RestMRs RestLits FOVList : TermList .
+  vars BK RestBK : TermSet .
+  vars LearnedRules NewRules CS Res ResBK ResRec ResRest : ILPClauseSet .
+  vars Rule NewClause : ILPClause .
+  vars E E' EnvHead EnvNext : Env .
+  vars E? : Env? .
+  vars BindV : BindVal .
+  vars F Q : Qid .
+  vars Head BLit : BoundLiteral .
+  vars Body RestBody : BoundBody .
+  vars Depth CurrentDepth MaxDepth N NextN : Nat .
+  vars IsCovered : Bool .
 
   --- =========================================================================
-  --- DATA STRUCTURE: SEARCH NODES
+  --- 2A. UNIFICATION ENGINE
   --- =========================================================================
-  sort SearchNode SearchNodeSet .
-  subsort SearchNode < SearchNodeSet .
+  op getVar : Term Env? -> BindVal .
+  eq getVar(V, (E , (V -> BindV))) = BindV .
+  eq getVar(V, E?) = 'nil.Term [owise] .
+
+  op bindVar : Term BindVal Env? -> Env? .
+  eq bindVar(V, BindV, failEnv) = failEnv .
+  eq bindVar(V, BindV, E) = 
+     if getVar(V, E) == 'nil.Term then (E , (V -> BindV)) 
+     else (if getVar(V, E) == BindV then E else failEnv fi) fi .
+
+  op getArgs : Term -> TermList .
+  eq getArgs(F[TL]) = TL .
+  eq getArgs(T) = empty [owise] .
+
+  op getFunctorId : Term -> Qid .
+  eq getFunctorId(F[TL]) = F .
+  eq getFunctorId(F) = F .
+  eq getFunctorId(T) = 'nil [owise] .
+
+  op matchArgs : TermList TermList Env? -> Env? .
+  eq matchArgs(empty, empty, E?) = E? .
+  eq matchArgs((V, TL1), (T, TL2), E?) = matchArgs(TL1, TL2, bindVar(V, T, E?)) .
+  eq matchArgs(V, T, E?) = bindVar(V, T, E?) .
+  eq matchArgs(TL1, TL2, E?) = failEnv [owise] .
+
+  op matchBoundLiteral : BoundLiteral Term Env? -> Env? .
+  eq matchBoundLiteral(Q << Args >>, Fact, E?) = 
+     if getFunctorId(Fact) == Q then matchArgs(Args, getArgs(Fact), E?) else failEnv fi .
+
+  --- =========================================================================
+  --- 2B. CHECK COVERAGE OF INDUCED RULES (USE only BK)
+  --- =========================================================================
+  op coversGoal : Term ILPClauseSet TermSet -> Bool .
+  eq coversGoal(Goal, LearnedRules, BK) = 
+     (Goal \in BK) or proveUsingLearnedRules(Goal, LearnedRules, BK) .
+
+  op proveUsingLearnedRules : Term ILPClauseSet TermSet -> Bool .
+  eq proveUsingLearnedRules(Goal, emptyClauseSet, BK) = false .
+
+  ceq proveUsingLearnedRules(Goal, (Rule ++ CS), BK) =
+      proveBoundBody(Body, EnvHead, BK) or proveUsingLearnedRules(Goal, CS, BK)
+    if (Head :- Body) := Rule
+    /\ EnvHead := matchBoundLiteral(Head, Goal, emptyEnv) 
+    /\ EnvHead =/= failEnv .
+    
+  eq proveUsingLearnedRules(Goal, CS, BK) = false [owise] .
+
+  --- =========================================================================
+  --- 2C.MAPPING EACH LITERAL IN BODY (USE ONLY BK)
+  --- =========================================================================
+  op proveBoundBody : BoundBody Env? TermSet -> Bool .
+  eq proveBoundBody(Body, failEnv, BK) = false .
+  eq proveBoundBody(emptyBB, E, BK) = true .
   
-  op emptyNodeSet : -> SearchNodeSet [ctor] .
-  op _++_ : SearchNodeSet SearchNodeSet -> SearchNodeSet [ctor assoc comm idem id: emptyNodeSet] .
-  op node : TermList ILPClauseSet Nat Nat -> SearchNode [ctor] .
+  eq proveBoundBody(BLit & RestBody, E, BK) = proveBoundBodyLit(BLit, RestBody, E, BK, BK) .
+
+  op proveBoundBodyLit : BoundLiteral BoundBody Env TermSet TermSet -> Bool .
+  eq proveBoundBodyLit(BLit, RestBody, E, BK, emptyTS) = false .
+
+  ceq proveBoundBodyLit(BLit, RestBody, E, BK, Fact U RestBK) =
+      if proveBoundBody(RestBody, EnvNext, BK) then true else proveBoundBodyLit(BLit, RestBody, E, BK, RestBK) fi
+    if EnvNext := matchBoundLiteral(BLit, Fact, E)
+    /\ EnvNext =/= failEnv .
+    
+  eq proveBoundBodyLit(BLit, RestBody, E, BK, Fact U RestBK) = proveBoundBodyLit(BLit, RestBody, E, BK, RestBK) [owise] .
 
   --- =========================================================================
-  --- COVERAGE EVALUATION & EARLY PRUNING (NEGATIVE CHECKING)
+  --- EXTRACT FROM METARULE AND GENERALIZE RULES
   --- =========================================================================
-  op isCovered : Term ILPClauseSet TermSet -> Bool .
-  eq isCovered(P, CS, TS) = if (P \in TS) then true else isProvable(P, CS, TS) fi .
+  op extractFOVs : Term -> TermList .
+  eq extractFOVs('_`,_[TL]) = TL .
+  eq extractFOVs(T) = T [owise] .
+
+  op getHead : Term -> Term .
+  eq getHead('metarule[V1, V2, V3]) = V2 .
+
+  op getBody : Term -> Term .
+  eq getBody('metarule[V1, V2, V3]) = V3 .
+
+  op extractLiterals : Term -> TermList .
+  eq extractLiterals('__[TL]) = TL .
+  eq extractLiterals('nilMB.MetaBody) = empty .
+  eq extractLiterals(T) = T [owise] .
+
+  op getPredVar : Term -> Term .
+  eq getPredVar('`[_:_`][PredVar, Fact]) = PredVar .
+  eq getPredVar(Goal) = 'nil.Term [owise] .
+
+  op matchMetaLiteral : Term Term Env? -> Env? .
+  eq matchMetaLiteral(T, Fact, failEnv) = failEnv .
+  eq matchMetaLiteral('`[_:_`][PredVar, FOVList], Fact, E) = 
+     matchArgs(extractFOVs(FOVList), getArgs(Fact), bindVar(PredVar, getFunctorId(Fact), E)) .
+
+  op getQid : BindVal -> Qid . 
+  eq getQid(Q) = Q . eq getQid(T) = 'nil .
+
+  op applyEnv : TermList Env? -> TermList .
+  eq applyEnv(empty, E?) = empty .
+  eq applyEnv((V, TL), E?) = (if getVar(V, E?) == 'nil.Term then V else getVar(V, E?) fi) , applyEnv(TL, E?) .
+
+  op boundLitToTerm : BoundLiteral -> Term .
+  eq boundLitToTerm(F << empty >>) = F .
+  eq boundLitToTerm(F << TL >>) = F[TL] [owise] .
+
+  --- 1. ĐÚC CỤ THỂ (Dùng để bơm biến A=ann vào Sub-Goal chạy đệ quy)
+  op instConcreteLit : Term Env -> BoundLiteral . 
+  eq instConcreteLit('`[_:_`][PredVar, FOVList], E) = getQid(getVar(PredVar, E)) << applyEnv(extractFOVs(FOVList), E) >> .
+
+  --- 2. ĐÚC TỔNG QUÁT (Dùng để đẻ luật cuối cùng: giữ nguyên A, B, C)
+  op instAbstractLit : Term Env -> BoundLiteral . 
+  eq instAbstractLit('`[_:_`][PredVar, FOVList], E) = getQid(getVar(PredVar, E)) << extractFOVs(FOVList) >> .
+
+  op instAbstractBody : TermList Env -> BoundBody .
+  eq instAbstractBody(empty, E) = emptyBB .
+  eq instAbstractBody((T, TL), E) = instAbstractLit(T, E) & instAbstractBody(TL, E) .
+  eq instAbstractBody(T, E) = instAbstractLit(T, E) .
+
+  op instantiate : Term Env -> ILPClause . 
+  eq instantiate(MR, E) = (instAbstractLit(getHead(MR), E) :- instAbstractBody(extractLiterals(getBody(MR)), E)) .
+
+  op coversAnyNEG : ILPClause TermList TermSet -> Bool .
+  eq coversAnyNEG(Rule, empty, BK) = false .
+  ceq coversAnyNEG(Rule, (NegEx, NEG), BK) = true if coversGoal(NegEx, Rule ++ emptyClauseSet, BK) .
+  eq coversAnyNEG(Rule, (NegEx, NEG), BK) = coversAnyNEG(Rule, NEG, BK) [owise] .
+
+  --- =========================================================================
+  --- 3B. SEARCH BY METARULES (SEARCH PROOF)
+  --- =========================================================================
+  op searchProof : Term TermList TermSet ILPClauseSet TermList Nat Nat -> ILPClauseSet .
+  eq searchProof(Goal, NEG, BK, CS, AllMRs, 0, N) = emptyClauseSet .
+  eq searchProof(Goal, NEG, BK, CS, AllMRs, Depth, N) = tryMRs(Goal, NEG, BK, CS, AllMRs, AllMRs, Depth, N) [owise] .
+
+  op tryMRs : Term TermList TermSet ILPClauseSet TermList TermList Nat Nat -> ILPClauseSet .
+  eq tryMRs(Goal, NEG, BK, CS, AllMRs, empty, Depth, N) = emptyClauseSet .
   
-  op isSafeFromNEG : TermList ILPClauseSet TermSet -> Bool .
-  eq isSafeFromNEG(empty, CS, TS) = true .
-  ceq isSafeFromNEG((NegEx, RestNEG), CS, TS) = false 
-    if isProvable(NegEx, CS, TS) == true .
-  eq isSafeFromNEG((NegEx, RestNEG), CS, TS) = isSafeFromNEG(RestNEG, CS, TS) [owise] .
+  ceq tryMRs(Goal, NEG, BK, CS, AllMRs, (MR, RestMRs), Depth, N) =
+      if Res =/= emptyClauseSet then Res else tryMRs(Goal, NEG, BK, CS, AllMRs, RestMRs, Depth, N) fi
+    if EnvHead := matchMetaLiteral(getHead(MR), Goal, emptyEnv)
+    /\ Res := (if EnvHead == failEnv then emptyClauseSet else solveLits(extractLiterals(getBody(MR)), EnvHead, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) fi) .
+               
+  eq tryMRs(Goal, NEG, BK, CS, AllMRs, (MR, RestMRs), Depth, N) = tryMRs(Goal, NEG, BK, CS, AllMRs, RestMRs, Depth, N) [owise] .
 
   --- =========================================================================
-  --- MAIN ALGORITHM: META-INTERPRETIVE LEARNING
+  --- ITERATIVE DEEPENING SEARCH (IDS)
+  --- =========================================================================
+  op idsSearchProof : Term TermList TermSet ILPClauseSet TermList Nat Nat -> ILPClauseSet .
+
+  ceq idsSearchProof(Goal, NEG, BK, CS, AllMRs, CurrentDepth, MaxDepth) = emptyClauseSet
+    if CurrentDepth > MaxDepth .
+
+  ceq idsSearchProof(Goal, NEG, BK, CS, AllMRs, CurrentDepth, MaxDepth) =
+      if Res =/= emptyClauseSet then Res
+      else idsSearchProof(Goal, NEG, BK, CS, AllMRs, s(CurrentDepth), MaxDepth) fi
+    if CurrentDepth <= MaxDepth
+    /\ Res := searchProof(Goal, NEG, BK, CS, AllMRs, CurrentDepth, 1) .
+
+  --- =========================================================================
+  --- 4. SOLVE STEP BY STEP EVERY LITERAL IN BODY 
+  --- =========================================================================
+  op solveLits : TermList Env Term Term TermList TermSet ILPClauseSet TermList Nat Nat -> ILPClauseSet .
+  
+  ceq solveLits(empty, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) = 
+      if coversAnyNEG(NewClause, NEG, BK) then emptyClauseSet else NewClause fi 
+    if NewClause := instantiate(MR, E) .
+
+  ceq solveLits((MetaLit, RestLits), E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) =
+      if ResBK =/= emptyClauseSet then ResBK else tryLitWithRec(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) fi
+    if ResBK := tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, BK) .
+
+  op tryLitWithBK : Term TermList Env Term Term TermList TermSet ILPClauseSet TermList Nat Nat TermSet -> ILPClauseSet .
+  eq tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, emptyTS) = emptyClauseSet .
+  
+  ceq tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, Fact U RestBK) =
+      if Res =/= emptyClauseSet then Res else tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, RestBK) fi
+    if E' := matchMetaLiteral(MetaLit, Fact, E)
+    /\ Res := (if E' == failEnv then emptyClauseSet else solveLits(RestLits, E', Goal, MR, NEG, BK, CS, AllMRs, Depth, N) fi) .
+               
+  eq tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, Fact U RestBK) = tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, RestBK) [owise] .
+
+  --- =========================================================================
+  --- 5. PREDICATE INVENTION
+  --- =========================================================================
+  op isUnboundPredVar : Term Env -> Bool .
+  eq isUnboundPredVar(MetaLit, E) = 
+     (getPredVar(MetaLit) =/= 'nil.Term) and (getVar(getPredVar(MetaLit), E) == 'nil.Term) .
+
+  op genFreshPredSymbol : Nat -> Qid .
+  eq genFreshPredSymbol(N) = qid("inv" + string(N, 10)) .
+
+  op bindInventedPred : Term Nat Env -> Env .
+  ceq bindInventedPred(MetaLit, N, E) = 
+      E , (getPredVar(MetaLit) -> genFreshPredSymbol(N))
+    if getPredVar(MetaLit) =/= 'nil.Term .
+  eq bindInventedPred(MetaLit, N, E) = E [owise] .
+
+  op instantiateConcreteGoal : Term Env -> Term .
+  ceq instantiateConcreteGoal(MetaLit, E) = boundLitToTerm(instConcreteLit(MetaLit, E))  --- Dùng đúc Cụ thể
+    if isUnboundPredVar(MetaLit, E) == false .
+  eq instantiateConcreteGoal(MetaLit, E) = 'nil.Term [owise] .
+
+  op tryLitWithPI : Term TermList Env Term Term TermList TermSet ILPClauseSet TermList Nat Nat -> ILPClauseSet .
+  
+  ceq tryLitWithPI(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) =
+      if Depth == 0 then emptyClauseSet
+      else 
+        (if ResRec =/= emptyClauseSet and ResRest =/= emptyClauseSet then 
+          (ResRest ++ ResRec)
+        else
+          emptyClauseSet
+        fi)
+      fi
+    if isUnboundPredVar(MetaLit, E)
+    /\ E' := bindInventedPred(MetaLit, N, E)
+    /\ NewGoal := instantiateConcreteGoal(MetaLit, E')
+    /\ NewGoal =/= 'nil.Term
+    /\ ResRec := searchProof(NewGoal, NEG, BK, CS, AllMRs, sd(Depth, 1), s(N))
+    /\ ResRest := (if ResRec == emptyClauseSet then emptyClauseSet
+                   else solveLits(RestLits, E', Goal, MR, NEG, BK, CS ++ ResRec, AllMRs, Depth, s(N)) fi) .
+
+  eq tryLitWithPI(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) = emptyClauseSet [owise] .
+
+  --- =========================================================================
+  --- 6. SOLVE TailREC and PI  (XỬ LÝ ĐỆ QUY ĐUÔI)
+  --- =========================================================================
+  op tryLitWithRec : Term TermList Env Term Term TermList TermSet ILPClauseSet TermList Nat Nat -> ILPClauseSet .
+  
+  ceq tryLitWithRec(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) =
+      if IsCovered then solveLits(RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N)
+      else (if ResRec =/= emptyClauseSet and ResRest =/= emptyClauseSet then (ResRest ++ ResRec) else emptyClauseSet fi) fi
+    if PredVar := getPredVar(MetaLit)
+    /\ getVar(PredVar, E) =/= 'nil.Term
+    /\ NewGoal := boundLitToTerm(instConcreteLit(MetaLit, E))  --- Dùng đúc Cụ thể
+    /\ IsCovered := coversGoal(NewGoal, CS, BK)
+    /\ ResRec := (if IsCovered then emptyClauseSet else searchProof(NewGoal, NEG, BK, CS, AllMRs, sd(Depth, 1), N) fi)
+    /\ ResRest := (if IsCovered then emptyClauseSet else 
+                   if ResRec == emptyClauseSet then emptyClauseSet 
+                   else solveLits(RestLits, E, Goal, MR, NEG, BK, CS ++ ResRec, AllMRs, Depth, N) fi fi) .
+
+  ceq tryLitWithRec(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) =
+      tryLitWithPI(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N)
+    if isUnboundPredVar(MetaLit, E) .
+                   
+  eq tryLitWithRec(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) = emptyClauseSet [owise] .
+
+  --- =========================================================================
+  --- MAIN --- LOOP FOR PROCESSING POSITIVE EXAMPLES
   --- =========================================================================
   op learn : TermList TermList TermSet TermList -> ILPClauseSet .
-  
-  --- Pass NEG constraint deep into the searchMIL engine for immediate pruning
-  eq learn(POS, NEG, TS, MRs) = 
-      filterNodes( searchMIL( node(POS, emptyClauseSet, MAX-DEPTH, 1), TS, MRs, NEG ), NEG, TS ) .
-      
-  op searchMIL : SearchNodeSet TermSet TermList TermList -> SearchNodeSet .
-  eq searchMIL(emptyNodeSet, TS, MRs, NEG) = emptyNodeSet .
-  
-  --- [SHORT-CIRCUIT OPTIMIZATION]: If a valid and safe terminal node is reached, discard all other branches
-  ceq searchMIL(node(empty, CS, Depth, N) ++ RestNodes, TS, MRs, NEG) = 
-      node(empty, CS, Depth, N) 
-   if isSafeFromNEG(NEG, CS, TS) == true .
-   
-  --- If a terminal node violates NEG, discard it and continue searching
-  eq searchMIL(node(empty, CS, Depth, N) ++ RestNodes, TS, MRs, NEG) = 
-      searchMIL(RestNodes, TS, MRs, NEG) [owise] .
-      
-  --- [PRUNING]: Terminate paths that exceed the maximum defined depth
-  eq searchMIL(node((Goal, RestGoals), CS, 0, N) ++ RestNodes, TS, MRs, NEG) = 
-      searchMIL(RestNodes, TS, MRs, NEG) .
-      
-  --- [COVERAGE SKIP OPTIMIZATION]: Skip expanding goals already satisfied by BK or CS
-  ceq searchMIL(node((Goal, RestGoals), CS, Depth, N) ++ RestNodes, TS, MRs, NEG) = 
-      searchMIL(node(RestGoals, CS, Depth, N) ++ RestNodes, TS, MRs, NEG)
-   if isCovered(Goal, CS, TS) == true .
-   
-  eq searchMIL(node((Goal, RestGoals), CS, Depth, N) ++ RestNodes, TS, MRs, NEG) = 
-      searchMIL( expandGoal(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) ++ RestNodes, TS, MRs, NEG ) [owise] .
-      
-  op expandGoal : Term TermList ILPClauseSet Nat Nat TermSet TermList TermList -> SearchNodeSet .
-  ceq expandGoal(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) = Phase1Res
-      if Phase1Res := tryPureBK(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG)
-      /\ Phase1Res =/= emptyNodeSet .
-  eq expandGoal(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) = 
-      tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) [owise] .
+  eq learn(POS, NEG, BK, Metarules) = learn(POS, NEG, BK, emptyClauseSet, Metarules) .
 
-  --- =========================================================================
-  --- PHASE 1: PURE BK MATCHING (SUPPORTING RECURSION)
-  --- =========================================================================
-  op tryPureBK : Term TermList ILPClauseSet Nat Nat TermSet TermList TermList -> SearchNodeSet .
-  eq tryPureBK(Goal, RestGoals, CS, Depth, N, TS, empty, NEG) = emptyNodeSet .
-  
-  ceq tryPureBK(Goal, RestGoals, CS, Depth, N, TS, (MR, MRs), NEG) = 
-      buildNodesFromEnv(MR, ES, RestGoals, CS, Depth, N, TS, NEG) ++ 
-      tryPureBK(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG)
-   if E := matchLiteral(getHead(MR), Goal, emptyEnv)
-   /\ E =/= failEnv
-   --- [FIX]: Uses proveGoals to search BOTH ClauseSet (CS) and TermSet (TS) for enabling recursive learning.
-   /\ ES := proveGoals(extractLiterals(getBody(MR)), E, CS, TS) .
-   
-  eq tryPureBK(Goal, RestGoals, CS, Depth, N, TS, (MR, MRs), NEG) = 
-      tryPureBK(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) [owise] .
-      
-  op buildNodesFromEnv : Term EnvSet TermList ILPClauseSet Nat Nat TermSet TermList -> SearchNodeSet .
-  eq buildNodesFromEnv(MR, emptyEnvSet, RestGoals, CS, Depth, N, TS, NEG) = emptyNodeSet .
-  
-  --- [STRICT GUARD]: Generated rules must immediately clear the NEG check to prevent invalid branch expansion
-  ceq buildNodesFromEnv(MR, E ++ ES, RestGoals, CS, Depth, N, TS, NEG) = 
-      node(RestGoals, CS ++ instantiate(MR, E), sd(Depth, 1), N) ++ 
-      buildNodesFromEnv(MR, ES, RestGoals, CS, Depth, N, TS, NEG)
-   if isSafeFromNEG(NEG, CS ++ instantiate(MR, E), TS) == true .
-   
-  eq buildNodesFromEnv(MR, E ++ ES, RestGoals, CS, Depth, N, TS, NEG) = 
-      buildNodesFromEnv(MR, ES, RestGoals, CS, Depth, N, TS, NEG) [owise] .
+  op learn : TermList TermList TermSet ILPClauseSet TermList -> ILPClauseSet .
+  eq learn(empty, NEG, BK, LearnedRules, Metarules) = LearnedRules .
 
-  --- =========================================================================
-  --- PHASE 2: PREDICATE INVENTION / ABDUCTION
-  --- =========================================================================
-  op tryAbductPI : Term TermList ILPClauseSet Nat Nat TermSet TermList TermList -> SearchNodeSet .
-  eq tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, empty, NEG) = emptyNodeSet .
-  
-  ceq tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, (MR, MRs), NEG) = 
-      buildNodesFromAbduct(MR, abduceBody(extractLiterals(getBody(MR)), E, TS, TS, N), RestGoals, CS, Depth, TS, NEG) ++
-      tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG)
-   if E := matchLiteral(getHead(MR), Goal, emptyEnv)
-   /\ E =/= failEnv .
-   
-  eq tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, (MR, MRs), NEG) = 
-      tryAbductPI(Goal, RestGoals, CS, Depth, N, TS, MRs, NEG) [owise] .
-      
-  op buildNodesFromAbduct : Term AbductResSet TermList ILPClauseSet Nat TermSet TermList -> SearchNodeSet .
-  eq buildNodesFromAbduct(MR, emptyAbductSet, RestGoals, CS, Depth, TS, NEG) = emptyNodeSet .
-  
-  eq buildNodesFromAbduct(MR, [ E | NewGoals | BB | N' | false ] ++ RestRes, RestGoals, CS, Depth, TS, NEG) = 
-      buildNodesFromAbduct(MR, RestRes, RestGoals, CS, Depth, TS, NEG) .
-      
-  --- [STRICT GUARD]: Prevent bad abducted predicate rules
-  ceq buildNodesFromAbduct(MR, [ E | NewGoals | BB | N' | true ] ++ RestRes, RestGoals, CS, Depth, TS, NEG) = 
-      node(mergeGoals(NewGoals, RestGoals), CS ++ (instLit(getHead(MR), E) :- BB), sd(Depth, 1), N') ++ 
-      buildNodesFromAbduct(MR, RestRes, RestGoals, CS, Depth, TS, NEG)
-   if isSafeFromNEG(NEG, CS ++ (instLit(getHead(MR), E) :- BB), TS) == true .
-   
-  eq buildNodesFromAbduct(MR, [ E | NewGoals | BB | N' | true ] ++ RestRes, RestGoals, CS, Depth, TS, NEG) = 
-      buildNodesFromAbduct(MR, RestRes, RestGoals, CS, Depth, TS, NEG) [owise] .
+  ceq learn((Goal, POS), NEG, BK, LearnedRules, Metarules) = learn(POS, NEG, BK, LearnedRules, Metarules)
+    if coversGoal(Goal, LearnedRules, BK) .
 
-  --- =========================================================================
-  --- FINAL RESULT EXTRACTION
-  --- =========================================================================
-  op filterNodes : SearchNodeSet TermList TermSet -> ILPClauseSet .
-  eq filterNodes(emptyNodeSet, NEG, TS) = emptyClauseSet .
+  ceq learn((Goal, POS), NEG, BK, LearnedRules, Metarules) = learn(POS, NEG, BK, LearnedRules ++ NewRules, Metarules)
+    if not coversGoal(Goal, LearnedRules, BK)
+    /\ NewRules := idsSearchProof(Goal, NEG, BK, LearnedRules, Metarules, 1, MAX-DEPTH) .
+
+endfm
+
+fmod ILP-DISPLAY is
+  protecting ILP-SEARCH .
+  protecting CONVERSION .
+  vars Q : Qid . vars TL : TermList . vars C : ILPClause . vars CS : ILPClauseSet .
+  vars B : BoundBody . vars L : BoundLiteral . vars T : Term .
   
-  --- SearchMIL prunes invalid nodes, so we simply extract the CS from the successful node
-  eq filterNodes(node(empty, CS, Depth, N), NEG, TS) = CS .
+  op cleanName : Term -> String . eq cleanName(T) = beforeDot(string(getName(T))) .
+  op showTL : TermList -> String .
+  eq showTL(empty) = "" . eq showTL(T) = cleanName(T) . eq showTL((T, TL)) = cleanName(T) + "," + showTL(TL) .
   
-  --- Fallback to discard invalid nodes or malformed input
-  eq filterNodes(Node:SearchNode ++ RestNodes, NEG, TS) = filterNodes(RestNodes, NEG, TS) [owise] .
+  op showLit : BoundLiteral -> String . eq showLit(Q << TL >>) = string(Q) + "(" + showTL(TL) + ")" .
+  op showBody : BoundBody -> String . eq showBody(emptyBB) = "." . eq showBody(L) = showLit(L) + " ." .
+  eq showBody(L & B) = showLit(L) + ", " + showBody(B) .
+  
+  op showClause : ILPClause -> String .
+  eq showClause(L :- B) = showLit(L) + " :- " + showBody(B) .
+  
+  op simulate : ILPClauseSet -> String .
+  eq simulate(emptyClauseSet) = "" . eq simulate(C ++ CS) = showClause(C) + (if CS == emptyClauseSet then "" else "   " fi) + simulate(CS) .
 endfm
