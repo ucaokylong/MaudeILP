@@ -114,7 +114,7 @@ fmod ILP-SEARCH is
   --- 2C.MAPPING EACH LITERAL IN BODY (USE ONLY BK)
   --- =========================================================================
   op proveBoundBody : BoundBody Env? TermSet -> Bool .
-  eq proveBoundBody(Body, failEnv, BK) = false .
+  ---eq proveBoundBody(Body, failEnv, BK) = false .
   eq proveBoundBody(emptyBB, E, BK) = true .
   
   eq proveBoundBody(BLit & RestBody, E, BK) = proveBoundBodyLit(BLit, RestBody, E, BK, BK) .
@@ -127,7 +127,7 @@ fmod ILP-SEARCH is
     if EnvNext := matchBoundLiteral(BLit, Fact, E)
     /\ EnvNext =/= failEnv .
     
-  eq proveBoundBodyLit(BLit, RestBody, E, BK, Fact U RestBK) = proveBoundBodyLit(BLit, RestBody, E, BK, RestBK) [owise] .
+  eq proveBoundBodyLit(BLit, RestBody, E, BK, Fact U RestBK) = false [owise] .
 
   --- =========================================================================
   --- EXTRACT FROM METARULE AND GENERALIZE RULES
@@ -240,7 +240,7 @@ fmod ILP-SEARCH is
     if E' := matchMetaLiteral(MetaLit, Fact, E)
     /\ Res := (if E' == failEnv then emptyClauseSet else solveLits(RestLits, E', Goal, MR, NEG, BK, CS, AllMRs, Depth, N) fi) .
                
-  eq tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, Fact U RestBK) = tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, RestBK) [owise] .
+  eq tryLitWithBK(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N, Fact U RestBK) = emptyClauseSet [owise] .
 
   --- =========================================================================
   --- 5. PREDICATE INVENTION
@@ -266,15 +266,13 @@ fmod ILP-SEARCH is
   op tryLitWithPI : Term TermList Env Term Term TermList TermSet ILPClauseSet TermList Nat Nat -> ILPClauseSet .
   
   ceq tryLitWithPI(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) =
-      if Depth == 0 then emptyClauseSet
-      else 
         (if ResRec =/= emptyClauseSet and ResRest =/= emptyClauseSet then 
           (ResRest ++ ResRec)
         else
           emptyClauseSet
         fi)
-      fi
-    if isUnboundPredVar(MetaLit, E)
+    if Depth > 0
+    /\ isUnboundPredVar(MetaLit, E)
     /\ E' := bindInventedPred(MetaLit, N, E)
     /\ NewGoal := instantiateConcreteGoal(MetaLit, E')
     /\ NewGoal =/= 'nil.Term
@@ -305,7 +303,7 @@ fmod ILP-SEARCH is
       tryLitWithPI(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N)
     if isUnboundPredVar(MetaLit, E) .
                    
-  eq tryLitWithRec(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) = emptyClauseSet [owise] .
+  ---eq tryLitWithRec(MetaLit, RestLits, E, Goal, MR, NEG, BK, CS, AllMRs, Depth, N) = emptyClauseSet [owise] .
 
   --- =========================================================================
   --- MAIN --- LOOP FOR PROCESSING POSITIVE EXAMPLES
