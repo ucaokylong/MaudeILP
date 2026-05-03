@@ -1,0 +1,42 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Person .
+    subsort Person < Param .
+
+    ops ann amy andy bob steve linda gavin amelia spongebob : -> Person [ctor] .
+    ops mother father grandparent : Person Person -> Pred [ctor] .
+
+    eq BK =
+        mother(ann,   amy)
+        mother(ann,   andy)
+        mother(amy,   amelia)
+        mother(amy,   bob)
+        mother(linda, gavin)
+        father(steve, amy)
+        father(steve, andy)
+        father(andy,  spongebob)
+        father(gavin, amelia) .
+
+
+    eq POS =
+        grandparent(ann,   amelia)
+        grandparent(steve, amelia)
+        grandparent(steve, spongebob)
+        grandparent(linda, amelia) .
+
+    eq NEG = grandparent(amy, amelia) .
+
+    vars P Q R : Pred .
+    vars A B C : Person .
+
+    eq METARULES =
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        (P(A,B) :- Q(A,B))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() .

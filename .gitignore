@@ -1,0 +1,5 @@
+lib
+*~
+.DS_Store
+test.maude
+debug.maude
