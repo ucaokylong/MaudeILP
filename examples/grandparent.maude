@@ -34,7 +34,7 @@ fmod ILP-PROBLEM is
 
     eq METARULES =
         (P(A,B) :- (Q(A,C)) (R(C,B)))
-        (P(A,B) :- Q(A,B))
+        (P(A,B) :- (Q(A,B)))
         [nonexec] .
 endfm
 

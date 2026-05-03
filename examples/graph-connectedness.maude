@@ -1,0 +1,58 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+  protecting ILP-DEFINITION-INPUT .
+
+  --- 1. KHAI BÁO THỰC THỂ (Các đỉnh trong đồ thị)
+  sort Node .
+  subsort Node < Param .
+  ops a b c d : -> Node [ctor] .
+
+  --- 2. KHAI BÁO VỊ TỪ
+  --- edge: cạnh trực tiếp (dữ liệu nền)
+  --- target: có đường đi (mục tiêu cần học)
+  ops edge target : Node Node -> Pred [ctor] .
+
+  --- 3. BACKGROUND KNOWLEDGE (BK)
+  --- Đồ thị có một vòng lặp nhỏ giữa a và b
+  eq BK =
+    edge(a, b)
+    edge(b, c)
+    edge(c, d)
+    edge(b, a) .
+
+  --- 4. POSITIVE EXAMPLES (Các cặp đỉnh có thể đi tới nhau)
+  eq POS =
+    target(a, b)
+    target(b, c)
+    target(c, d)
+    target(b, a)
+    target(a, c)
+    target(a, d)
+    target(a, a)
+    target(b, d)
+    target(b, a)
+    target(b, b) .
+
+
+
+
+
+  var P Q R : Pred .
+  var A B C : Node .
+
+
+  --- ident:   P(A,B) :- Q(A,B)
+  --- chain:   P(A,B) :- Q(A,C), R(C,B)
+  --- tailrec: P(A,B) :- Q(A,C), P(C,B) (Đệ quy đuôi)
+  eq METARULES =
+    (P(A,B) :- (Q(A,B)))
+    (P(A,B) :- (Q(A,C)) (R(C,B)))
+    (P(A,B) :- (Q(A,C)) (P(C,B))) 
+    [nonexec] .
+
+endfm
+
+select MAUDE-ILP .
+red learn() .
+red learn(1) .
