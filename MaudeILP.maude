@@ -269,17 +269,6 @@ fmod META-RULE-SET is
     eq hasRuleByQid(Q, BRS) = false [owise] .
 endfm
 
-fmod RULE-SET-LIST is
-    pr META-RULE-SET .
-
-    sorts NeRuleSetList RuleSetList .
-    subsorts BoundRuleSet < NeRuleSetList < RuleSetList .
-    op nil : -> RuleSetList [ctor] .
-    op _++_ : RuleSetList RuleSetList -> RuleSetList [ctor assoc id: nil] .
-    op _++_ : RuleSetList NeRuleSetList -> NeRuleSetList [ctor ditto] .
-    op _++_ : NeRuleSetList RuleSetList -> NeRuleSetList [ctor ditto] .
-endfm
-
 fmod PARSING is
     pr MODULE-HANDLING .
     pr META-RULE-SET .
@@ -375,6 +364,7 @@ fmod ENV is
     subsort Env ErrEnv < Env&Err .
     op errEnv : -> ErrEnv [ctor] .
     eq errEnv, (V |-> BV) = errEnv .
+    eq errEnv, errEnv = errEnv .
     
     vars BV? : [BindVal] .
     vars BV : BindVal .
@@ -427,7 +417,6 @@ fmod GOAL-LIST is
 endfm
 
 fmod ILP-OUTPUT is
-    pr RULE-SET-LIST .
     pr PATH .
     pr ENV .
     
@@ -541,7 +530,6 @@ fmod GOAL-HANDLING is
     vars BLL : BoundLiteralList .
     vars BL BL' : BoundLiteral .
     vars BRS? : [BoundRuleSet] .
-    vars RSL : RuleSetList .
     vars ML : MetaLiteral .
     vars SOVar : Variable .
     vars ENV? : Env&Err .
@@ -557,13 +545,12 @@ fmod GOAL-HANDLING is
     --- Checking coverage
     ----------------------------------------------------------
     --- covered by BK and rules
-    op isCovered : Term RuleSetList TermSet Nat -> Bool .
-    eq isCovered(G, RSL, BK, N) = if (G in BK) then true else isCoveredByRules(G, RSL, BK, N) fi .
+    op isCovered : Term BoundRuleSet TermSet Nat -> Bool .
+    eq isCovered(G, BRS, BK, N) = if (G in BK) then true else isCoveredByRules(G, BRS, BK, N) fi .
 
     --- covered by rules
-    op isCoveredByRules : Term RuleSetList TermSet Nat -> Bool .
-    eq isCoveredByRules(G, nil, BK, N) = false .
-    ceq isCoveredByRules(G, BRS ++ RSL, BK, N) = if (BRS' == empty) then isCoveredByRules(G, RSL, BK, N) else true fi 
+    op isCoveredByRules : Term BoundRuleSet TermSet Nat -> Bool .
+    ceq isCoveredByRules(G, BRS, BK, N) = BRS' =/= empty 
     if BRS' := checkGoals({goal: G, rules: BRS, path: nil, depth: 0}, BK, BRS, N) .
 
     --- cover any negative
@@ -591,9 +578,11 @@ fmod GOAL-HANDLING is
     if ENV? := matchLiteral(G, getHead(MR)) .
     
     ceq proceedGoals({lits: nil, facts: BK', path: PATH, depth: N'} GL, BK, MRS', N, NEG) =
-        if coverAnyNEG(BRS, NEG, BK, N)
-        then proceedGoals(GL, BK, MRS', N, NEG)
-        else BRS fi
+        if coverAnyNEG(BRS, NEG, BK, N) then 
+            proceedGoals(GL, BK, MRS', N, NEG)
+        else 
+            BRS 
+        fi
     if BRS := buildClauseSet(PATH) .
     ceq proceedGoals({lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N'} GL, BK, MRS', N, NEG) = 
         if isGroundLiteral(BL) then
@@ -623,8 +612,8 @@ fmod GOAL-HANDLING is
     op proceedGoalsWithFacts : GoalList TermSet MetaRuleSet Bound TermSet -> BoundRuleSet .
     --- no facts match OR some fact matched but that path does not hold
     ceq proceedGoalsWithFacts({lits: ML MLL, facts: emptyTS, path: [MR, ENV] PATH, depth: N'} GL, BK, MRS', N, NEG) = 
-        if (N' < N) and hasSOVarOnly(BL) and MLL == nil then
-            --- predicate invention iff all are instantiated except for its predicate and the current literal is at the end
+        if (N' < N) and hasSOVarOnly(BL) and MLL == nil and (size(getBody(MR)) > 1) then
+            --- predicate invention iff all are instantiated except for its predicate, the current literal is at the end, and the current rule is not identity
             proceedGoals(
                 {
                     goal: toGroundTerm(BL << (getSOVar(BL) |-> getPredInvName(N'))), 
@@ -671,7 +660,7 @@ fmod GOAL-HANDLING is
         fi
     if ENV? := matchLiteral(G, getHead(BR)) .
 
-    eq checkGoals({lits: nil, facts: BK', path: PATH, depth: N'} GL, BK, BRS', N) = buildClauseSet2(PATH) [print "PATH = " PATH] .
+    eq checkGoals({lits: nil, facts: BK', path: PATH, depth: N'} GL, BK, BRS', N) = buildClauseSet2(PATH) .
     ceq checkGoals({lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N'} GL, BK, BRS', N) = 
         if isGroundLiteral(BL') then
             --- fully instantiated
@@ -721,8 +710,7 @@ fmod MAUDE-ILP is
 
     vars MRS MRS' : MetaRuleSet .
     vars POS NEG BK : TermSet .
-    vars BRS : BoundRuleSet .
-    vars RSL : RuleSetList .
+    vars BRS BRS' : BoundRuleSet .
     vars G : Term .
     vars N : Nat .
     
@@ -732,23 +720,23 @@ fmod MAUDE-ILP is
 
     --- a bound for predicate invention and recursive calls
     op learn : Bound -> BoundRuleSet .
-    eq learn(N) = learn(getPOS(), getNEG(), getMetaRules(), getBK(), N, nil) .
+    eq learn(N) = learn(getPOS(), getNEG(), getMetaRules(), getBK(), N, empty) .
     
-    op learn : TermSet TermSet MetaRuleSet TermSet Bound RuleSetList -> BoundRuleSet .
-    eq learn(emptyTS, NEG, MRS, BK, N, RSL) = RSL .
-    eq learn(G | POS, NEG, MRS, BK, N, RSL) = 
-        if isCovered(G, RSL, BK, N) then
-            learn(POS, NEG, MRS, BK, N, RSL)
+    op learn : TermSet TermSet MetaRuleSet TermSet Bound BoundRuleSet -> BoundRuleSet .
+    eq learn(emptyTS, NEG, MRS, BK, N, BRS') = BRS' .
+    eq learn(G | POS, NEG, MRS, BK, N, BRS') = 
+        if isCovered(G, BRS', BK, N) then
+            learn(POS, NEG, MRS, BK, N, BRS')
         else
-            learn*(G | POS, NEG, MRS, BK, N, RSL)
+            learn*(G | POS, NEG, MRS, BK, N, BRS')
         fi .
 
-    op learn* : TermSet TermSet MetaRuleSet TermSet Bound RuleSetList -> BoundRuleSet .
-    ceq learn*(G | POS, NEG, MRS, BK, N, RSL) =
+    op learn* : TermSet TermSet MetaRuleSet TermSet Bound BoundRuleSet -> BoundRuleSet .
+    ceq learn*(G | POS, NEG, MRS, BK, N, BRS') =
         if BRS == empty then 
             empty
         else
-            learn(POS, NEG, MRS, BK, N, (BRS ++ RSL))
+            learn(POS, NEG, MRS, BK, N, (BRS, BRS'))
         fi
     if BRS := proceedGoals({goal: G, rules: MRS, path: nil, depth: 0}, BK, MRS, N, NEG) .
 endfm
