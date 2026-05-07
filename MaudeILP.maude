@@ -667,7 +667,6 @@ fmod GOAL-HANDLING is
             if (hasElt(BL', BK)) then
                 checkGoals({lits: BLL, facts: BK', path: [BR, ENV] PATH, depth: N'} GL, BK, BRS', N)
             else
-                --- support only predicate invention
                 --- if (N' < N) and isPredInv(getSOVar(BL'), BRS') and (BLL == nil) then
                 --- support recursive calls as well as predication invention
                 if (N' < N) and (BLL == nil) and hasRuleByQid(getSOVar(BL'), BRS') then
@@ -676,7 +675,7 @@ fmod GOAL-HANDLING is
                         GL, BK, BRS', N
                     )
                 else
-                    empty
+                    checkGoals(GL, BK, BRS', N)
                 fi 
             fi
         else
@@ -733,7 +732,7 @@ fmod MAUDE-ILP is
 
     op learn* : TermSet TermSet MetaRuleSet TermSet Bound BoundRuleSet -> BoundRuleSet .
     ceq learn*(G | POS, NEG, MRS, BK, N, BRS') =
-        if BRS == empty then 
+        if BRS == empty then
             empty
         else
             learn(POS, NEG, MRS, BK, N, (BRS, BRS'))
