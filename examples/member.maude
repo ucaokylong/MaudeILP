@@ -1,0 +1,71 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sorts Num NumList .
+    subsort Num < NumList .       --- Any single number is automatically a valid NumList
+    subsort Num NumList < Param . --- Both sorts are valid parameters for predicates
+
+    --- Pure numeric constant declarations
+    ops 0 1 2 3 4 5 6 7 8 : -> Num [ctor] .
+
+    --- List constructor: prepending a number to a list
+    op _::_ : Num NumList -> NumList [ctor] . 
+
+    --- Predicate declarations matching Metagol's exact signatures
+    op target : Num NumList -> Pred [ctor] .    --- Param 1: Num, Param 2: NumList
+    op value  : NumList Num -> Pred [ctor] .    --- Param 1: NumList, Param 2: Num
+    op cons   : NumList NumList -> Pred [ctor] . --- Both parameters are NumList
+
+    --- Background Knowledge (BK)
+    --- The list terminates at the last element; cons([1], 0) is mapped to cons(1, 0)
+    eq BK =
+        cons(4 :: 3 :: 2 :: 1, 3 :: 2 :: 1)
+        cons(3 :: 2 :: 1, 2 :: 1)
+        cons(2 :: 1, 1)
+        cons(1, 0)
+        value(4 :: 3 :: 2 :: 1, 4)
+        value(3 :: 2 :: 1, 3)
+        value(2 :: 1, 2)
+        value(1, 1) .
+
+    --- Positive Examples (POS) - No trailing 0 or nil markers
+    eq POS =
+        target(4, 4 :: 3 :: 2 :: 1)
+        target(3, 4 :: 3 :: 2 :: 1)
+        target(2, 4 :: 3 :: 2 :: 1)
+        target(1, 4 :: 3 :: 2 :: 1)
+        target(3, 3 :: 2 :: 1)
+        target(2, 3 :: 2 :: 1)
+        target(1, 3 :: 2 :: 1)
+        target(2, 2 :: 1)
+        target(1, 2 :: 1)
+        target(1, 1) .
+
+    --- Negative Examples (NEG)
+    eq NEG =
+        target(5, 4 :: 3 :: 2 :: 1)
+        target(6, 4 :: 3 :: 2 :: 1)
+        target(7, 4 :: 3 :: 2 :: 1)
+        target(8, 4 :: 3 :: 2 :: 1)
+        target(4, 3 :: 2 :: 1)
+        target(5, 3 :: 2 :: 1)
+        target(6, 3 :: 2 :: 1)
+        target(3, 2 :: 1)
+        target(4, 2 :: 1)
+        target(2, 1) .
+
+    vars P Q : Pred .
+    vars A : Num .
+    vars B C : NumList .
+
+    --- Metarules (Implicitly handles subsorting and type-matching)
+    eq METARULES =
+        (P(A,B) :- (Q(B,A)))
+        (P(A,B) :- (Q(B,C)) (P(A,C)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn(2) .

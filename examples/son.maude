@@ -1,0 +1,60 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Person .
+    subsort Person < Param .
+
+    --- Constant declarations
+    ops a b c d e f g h i : -> Person [ctor] .
+
+    --- Predicate declarations (Note: target_1 / inv1 is automatically handled)
+    ops father brother sister target : Person Person -> Pred [ctor] .
+
+    --- Background Knowledge (BK)
+    eq BK =
+        father(a, b)
+        father(a, c)
+        father(d, e)
+        father(d, f)
+        father(g, h)
+        father(g, i)
+        brother(b, c)
+        brother(c, b)
+        brother(e, f)
+        sister(f, c)
+        sister(h, i)
+        sister(i, h) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        target(b, a)
+        target(c, a)
+        target(e, d) .
+
+    --- Negative Examples (NEG)
+    eq NEG =
+        target(a, b)
+        target(b, c)
+        target(c, d)
+        target(d, e)
+        target(e, f)
+        target(f, g)
+        target(g, h)
+        target(h, i) .
+
+    vars P Q R : Pred .
+    vars A B : Person .
+
+    --- Metarules
+    --- Rule 1: Inverse with a trailing property check (PI happens here!)
+    --- Rule 2: Existential relational check
+    eq METARULES =
+        (P(A,B) :- (Q(B,A)) (R(A)))
+        (P(A)   :- (Q(A,B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn(2) .

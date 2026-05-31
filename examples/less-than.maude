@@ -1,0 +1,69 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Num .
+    subsort Num < Param .
+
+    --- Constant declarations
+    ops 0 1 2 3 4 5 6 7 8 9 10 : -> Num [ctor] .
+
+    --- Predicate declarations (Binary predicates)
+    ops succ target : Num Num -> Pred [ctor] .
+
+    --- Background Knowledge (BK)
+    --- Explicitly grounding Prolog's built-in succ/2 for MaudeILP's static environment
+    eq BK =
+        succ(0, 1)
+        succ(1, 2)
+        succ(2, 3)
+        succ(3, 4)
+        succ(4, 5)
+        succ(5, 6)
+        succ(6, 7)
+        succ(7, 8)
+        succ(8, 9)
+        succ(9, 10) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        target(1, 3)
+        target(2, 5)
+        target(3, 7)
+        target(4, 10)
+        target(5, 9)
+        target(6, 8)
+        target(7, 9)
+        target(8, 10)
+        target(9, 10) .
+
+    --- Negative Examples (NEG)
+    eq NEG =
+        target(3, 1)
+        target(7, 1)
+        target(2, 2)
+        target(8, 2)
+        target(4, 3)
+        target(9, 3)
+        target(4, 0)
+        target(10, 4)
+        target(5, 5)
+        target(6, 5) .
+
+    vars P Q R : Pred .
+    vars A B C : Num .
+
+    --- Metarules (Identity rule and Chain rule)
+    eq METARULES =
+        (P(A,B) :- (Q(A,B)))
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() .
+red learn(1) .
+red learn(2) .
+red learn(3) .
+red learn(4) .

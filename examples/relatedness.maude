@@ -1,0 +1,64 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Person .
+    subsort Person < Param .
+
+    --- Constant declarations
+    ops a b c d e f g h : -> Person [ctor] .
+
+    --- Predicate declarations (Binary relations)
+    ops parent target : Person Person -> Pred [ctor] .
+
+    --- Background Knowledge (BK)
+    eq BK =
+        parent(a, b)
+        parent(a, c)
+        parent(c, e)
+        parent(c, f)
+        parent(d, c)
+        parent(g, h) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        target(a, b)
+        target(a, c)
+        target(a, e)
+        target(a, f)
+        target(f, a)
+        target(a, a)
+        target(d, b)
+        target(h, g) .
+
+    --- Negative Examples (NEG)
+    eq NEG =
+        target(g, a)
+        target(a, h)
+        target(e, g)
+        target(g, b) .
+
+    vars P Q R : Pred .
+    vars A B C : Person .
+
+    --- Metarules (Identity, Inverse, and Chain rules)
+    eq METARULES =
+        (P(A,B) :- (Q(A,B)))
+        (P(A,B) :- (Q(B,A)))
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+--- red learn(1) .
+--- red learn(2) .
+red learn(3) .
+--- red learn(4) .
+--- red learn(5) .
+--- red learn(6) .
+--- red learn(7) .
+--- red learn(8) .
+--- red learn(9) .
+--- red learn(10) .
+--- red learn(20) .

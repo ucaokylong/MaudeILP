@@ -1,0 +1,54 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Person .
+    subsort Person < Param .
+
+    --- Constant declarations (Using camelCase to avoid mixfix underscore warnings)
+    ops queenVictoria edwardSeventh georgeFifth georgeSixth elizabethSecond 
+        queenMother princeCharles princePhilip princeWilliam princeHarry 
+        princessDiana princeGeorge : -> Person [ctor] .
+
+    --- Predicate declarations (Binary predicates)
+    ops parent ancestor : Person Person -> Pred [ctor] .
+
+    --- Background Knowledge (BK)
+    eq BK =
+        parent(queenVictoria, edwardSeventh)
+        parent(edwardSeventh, georgeFifth)
+        parent(georgeFifth, georgeSixth)
+        parent(georgeSixth, elizabethSecond)
+        parent(queenMother, elizabethSecond)
+        parent(elizabethSecond, princeCharles)
+        parent(princePhilip, princeCharles)
+        parent(princeCharles, princeWilliam)
+        parent(princeCharles, princeHarry)
+        parent(princessDiana, princeWilliam)
+        parent(princessDiana, princeHarry)
+        parent(princeWilliam, princeGeorge) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        ancestor(elizabethSecond, princeCharles)
+        ancestor(georgeSixth, princeHarry)
+        ancestor(queenMother, princeWilliam) .
+
+    --- Negative Examples (NEG) - Empty list
+    eq NEG = nil .
+
+    vars P Q : Pred .
+    vars A B C : Person .
+
+    --- Metarules (Includes Identity rule and Recursive rule)
+    eq METARULES =
+        (P(A,B) :- (Q(A,B)))
+        (P(A,B) :- (Q(A,C)) (P(C,B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() .
+red learn(1) .
+red learn(2) .

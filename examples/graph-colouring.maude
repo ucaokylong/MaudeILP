@@ -1,0 +1,54 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Item .
+    subsort Item < Param .
+
+    --- Khai bao cac hang so (Constants)
+    ops a b c d e f green red : -> Item [ctor] .
+
+    --- Khai bao cac vi tu (Predicates)
+    ops edge colour : Item Item -> Pred [ctor] .
+    op target : Item -> Pred [ctor] .
+
+    --- Background Knowledge (BK)
+    eq BK =
+        edge(a, b)
+        edge(b, c)
+        edge(b, d)
+        edge(c, e)
+        edge(e, f)
+        colour(a, green)
+        colour(b, red)
+        colour(c, green)
+        colour(d, green)
+        colour(e, red)
+        colour(f, red) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        target(e) .
+
+    --- Negative Examples (NEG)
+    eq NEG =
+        target(a)
+        target(b)
+        target(c)
+        target(d)
+        target(f) .
+
+    vars P Q R : Pred .
+    vars A B C : Item .
+
+    --- Metarules
+    eq METARULES =
+        (P(A) :- (Q(A,B)) (R(A,B)))
+        (P(A,B) :- (Q(A,C)) (R(B,C)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+--- red learn() .
+red learn(1) .

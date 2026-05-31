@@ -1,0 +1,44 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Node .
+    subsort Node < Param .
+
+    --- Khai báo các hằng số (Constants/Nodes)
+    ops a b c d : -> Node [ctor] .
+
+    --- Khai báo các vị từ (Predicates) song ngôi
+    ops edge p : Node Node -> Pred [ctor] .
+
+    --- Background Knowledge (BK)
+    eq BK =
+        edge(a, b)
+        edge(b, c)
+        edge(c, a)
+        edge(a, d) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        p(a, b)
+        p(a, c)
+        p(a, a) .
+
+    --- Negative Examples (NEG) - Trống (empty list)
+    eq NEG = nil .
+
+    vars P Q : Pred .
+    vars A B C : Node .
+
+    --- Metarules (Bao gồm luật đồng nhất và luật đệ quy đuôi)
+    eq METARULES =
+        (P(A,B) :- (Q(A,B)))
+        (P(A,B) :- (Q(A,C)) (P(C,B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() .
+red learn(1) .
+red learn(2) .

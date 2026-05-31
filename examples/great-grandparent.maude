@@ -17,7 +17,7 @@ fmod ILP-PROBLEM is
 
     eq POS = great-grandparent(ann, dawn) .
 
-    eq NEG = grandparent(ann, dawn) .
+    eq NEG = great-grandparent(ann, cal) .
 
     vars P Q R : Pred .
     vars A B C : Person .

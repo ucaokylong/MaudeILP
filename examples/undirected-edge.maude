@@ -1,0 +1,43 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Node .
+    subsort Node < Param .
+
+    --- Constant declarations
+    ops a b c d : -> Node [ctor] .
+
+    --- Predicate declarations
+    ops edge target : Node Node -> Pred [ctor] .
+
+    --- Background Knowledge (BK)
+    eq BK =
+        edge(a, b)
+        edge(b, d)
+        edge(c, c) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        target(a, b)
+        target(b, a)
+        target(b, d)
+        target(d, b)
+        target(c, c) .
+
+    --- Negative Examples (NEG) are empty
+
+
+    vars P Q : Pred .
+    vars A B : Node .
+
+    --- Metarules (Identity and Inverse)
+    eq METARULES =
+        (P(A,B) :- (Q(A,B)))
+        (P(A,B) :- (Q(B,A)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn(1) .

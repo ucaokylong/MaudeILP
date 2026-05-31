@@ -1,0 +1,48 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT  .
+
+    sort Val .
+    subsort Val < Param .
+
+    ops a b c d e red green : -> Val [ctor]  .
+
+    ops edge colour : Val Val -> Pred [ctor]  .
+    ops red green target : Val -> Pred [ctor]  .
+
+    eq BK =
+        edge(a, b) 
+        edge(b, a)
+        edge(c, d)
+        edge(c, e)
+        edge(d, e)
+        colour(a, red)
+        colour(b, green)
+        colour(c, red)
+        colour(d, red)
+        colour(e, green)  
+        red(red)
+        green(green)  .
+
+    eq POS = 
+        target(b)
+        target(c)  . 
+    eq NEG =
+        target(a)
+        target(d)
+        target(e)  .
+
+    vars P Q R : Pred  .
+    vars A B : Val  .
+
+    eq METARULES =
+        (P(A) :- (Q(A, B)) (R(B)))
+        [nonexec]  . 
+
+endfm
+
+select MAUDE-ILP  .
+--- red learn() .
+red learn(1) .
+

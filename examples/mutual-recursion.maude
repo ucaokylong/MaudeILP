@@ -1,0 +1,54 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Num .
+    subsort Num < Param .
+
+    --- Constant declarations
+    ops 0 1 2 3 4 5 6 7 8 9 10 : -> Num [ctor] .
+
+    --- Predicate declarations
+    op s : Num Num -> Pred [ctor] .    --- Binary successor relation from BK
+    op even : Num -> Pred [ctor] .     --- Unary target predicate
+
+    --- Background Knowledge (BK)
+    eq BK =
+        s(10, 9)
+        s(9, 8)
+        s(8, 7)
+        s(7, 6)
+        s(6, 5)
+        s(5, 4)
+        s(4, 3)
+        s(3, 2)
+        s(2, 1)
+        s(1, 0) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        even(10)
+        even(8)
+        even(6)
+        even(4)
+        even(2) .
+
+    --- Negative Examples (NEG)
+    eq NEG =
+        even(3) .
+
+    vars P Q R : Pred .
+    vars A B : Num .
+
+    --- Metarules
+    --- The base rule is anchored at 0 to mimic Metagol's structural boundary stop
+    --- The chain rule facilitates mutual recursion via predicate invention
+    eq METARULES =
+        (P(0) :- nil)
+        (P(A) :- (Q(A,B)) (R(B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn(10) .

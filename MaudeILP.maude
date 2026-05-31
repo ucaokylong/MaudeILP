@@ -1,5 +1,6 @@
 fmod PARAM is
-    sort Param .
+    sorts Param ConstVariable FreeVariable .
+    subsorts ConstVariable FreeVariable < Param .
 endfm
 
 view Param from TRIV to PARAM is
@@ -54,8 +55,10 @@ fmod RULE is
     subsort Param < FOVar .
     sorts Head Body Rule .
     subsort Literal < Head .
-    subsort NeLiteralList < Body .
-    op _:-_ : Head Body -> Rule .
+    subsort LiteralList < Body .
+    op _:-_ : Head Body -> Rule [prec 120].
+    --- Rule built just from Head
+    op _:- : Head -> Rule [prec 110].
 endfm
 
 view Rule from TRIV to RULE is
@@ -214,7 +217,6 @@ fmod META-LITERAL-LIST is
         sort NeList{BoundLiteral} to NeBoundLiteralList, 
         sort List{BoundLiteral} to BoundLiteralList
     ) .
-    
     sorts NeMetaLiteralList MetaLiteralList NeGroundLiteralList GroundLiteralList .
     subsorts MetaLiteral < NeMetaLiteralList < NeBoundLiteralList MetaLiteralList < BoundLiteralList .
     subsorts GroundLiteral < NeGroundLiteralList < NeBoundLiteralList GroundLiteralList < BoundLiteralList .
@@ -224,6 +226,9 @@ fmod META-LITERAL-LIST is
     op __ : GroundLiteralList GroundLiteralList -> GroundLiteralList [ctor ditto] .
     op __ : NeGroundLiteralList GroundLiteralList -> NeGroundLiteralList [ctor ditto] .
     op __ : GroundLiteralList NeGroundLiteralList -> NeGroundLiteralList [ctor ditto] .
+
+    --- Ép kiểu nil về MetaLiteralList để không bị giáng cấp Rule
+    op nil : -> MetaLiteralList .
 endfm
 
 fmod META-RULE is
@@ -291,6 +296,8 @@ fmod PARSING is
 
     op parseItems* : Term -> TermSet .
     eq parseItems*('__[T, T']) = T | parseItems*(T') .
+
+
     eq parseItems*(T) = T [owise] .
     
     --- [TODO] Checking semantics of parameters in meta rules
@@ -304,6 +311,8 @@ fmod PARSING is
 
     op parseRule : Term -> MetaRuleSet .
     eq parseRule('_:-_[T, T']) = parseLiteral(T) :- parseBody(T') . 
+    --- Special case for rules without body 
+    eq parseRule('_:-[T]) = parseLiteral(T) :- nil .
     eq parseRule(T) = empty [owise] .
 
     op parseLiteral : Term -> MetaLiteral .
@@ -428,17 +437,48 @@ fmod ILP-OUTPUT is
     vars VL : VarList .
     vars PATH : Path .
     vars ENV : Env .
+    vars T' : Term . --- Safe variable for storing the result of ENV lookup, ensuring that we don't accidentally overwrite any variables during the application process
+    vars S : Sort .
+    --- ==========================================
+    --- Support functions to apply ENV bindings to the literals in the path, ensuring that constants are preserved and free variables are handled correctly
+    --- ==========================================
+    
+    --- 1. recognise constant variables by checking if their sort is a subsort of 'ConstVariable
+    op isConstantVar : Term -> Bool .
+    ceq isConstantVar(V:Variable) = sortLeq(upModule('ILP-PROBLEM, false), S, 'ConstVariable) 
+        if S := getType(V:Variable) .
+    eq isConstantVar(T:Term) = false [owise] .
+
+    --- 2. Filter and apply ENV bindings to a TermList, replacing variables with their bound values while preserving constants
+    op applyConstants : TermList Env -> TermList .
+    eq applyConstants(empty, ENV) = empty .
+    
+    ceq applyConstants((V:Variable, TL:TermList), ENV) =
+        (if isConstantVar(V:Variable)
+         then T'
+         else V:Variable fi) , applyConstants(TL:TermList, ENV)
+    if T' := (V:Variable **<< ENV) .
+    
+    eq applyConstants((T:Term, TL:TermList), ENV) = T:Term , applyConstants(TL:TermList, ENV) [owise] .
+
+    --- ==========================================
+    --- Function to build the clause set from the path, applying constants where necessary
+    --- ==========================================
 
     op buildClauseSet : Path -> BoundRuleSet .
     eq buildClauseSet(nil) = empty .
     eq buildClauseSet([MR, ENV] PATH) = buildClause(MR, ENV), buildClauseSet(PATH) .
+
     op buildClause : MetaRule Env -> BoundRule .
     eq buildClause(ML :- MLL, ENV) = buildBoundLiteral(ML, ENV) :- buildBoundLiteralList(MLL, ENV) .
+
     op buildBoundLiteralList : BoundLiteralList Env -> BoundLiteralList .
     eq buildBoundLiteralList(nil, ENV) = nil .
     eq buildBoundLiteralList(ML MLL, ENV) = buildBoundLiteral(ML, ENV) buildBoundLiteralList(MLL, ENV) .
+
+    --- 3. Main function to build a bound literal from a meta literal and an ENV, applying the bindings while preserving constants
     op buildBoundLiteral : BoundLiteral Env -> BoundLiteral .
-    eq buildBoundLiteral(SOVar <> VL, ENV) = (SOVar **<< ENV) <> VL .
+    eq buildBoundLiteral(SOVar <> VL, ENV) = (SOVar **<< ENV) <> applyConstants(VL, ENV) .
 
     --- for checking coverage of negatives
     op buildClauseSet2 : Path -> BoundRuleSet .
@@ -482,6 +522,7 @@ fmod LITERAL-MATCHING is
     vars TL TL' : TermList .
     vars T T' : Term .
     vars G : Term .
+    vars S : Sort .
     
     --- For example:
     --- G: 'parent('ann.Person, 'amelia.Person)
@@ -501,11 +542,20 @@ fmod LITERAL-MATCHING is
     if getNumOfArgs(G) == getNumOfAriry(BL) .
     eq matchLiteral(G, BL) = errEnv [owise] .
 
+    op isFreeVar : Term -> Bool .
+    ceq isFreeVar(V:Variable) = sortLeq(upModule('ILP-PROBLEM, false), S, 'FreeVariable) 
+        if S := getType(V:Variable) .
+    eq isFreeVar(T:Term) = false [owise] .
+
     op matchArgs : TermList TermList -> Env&Err .
     eq matchArgs(empty, empty) = empty .
     eq matchArgs((T, TL), (T', TL')) = 
         if T' :: Variable then 
-            (T' |-> T), matchArgs(TL, TL')
+            if isFreeVar(T') then
+                matchArgs(TL:TermList, TL':TermList)
+            else
+                (T' |-> T), matchArgs(TL, TL')
+            fi
         else
             if T' == T then
                 matchArgs(TL, TL')

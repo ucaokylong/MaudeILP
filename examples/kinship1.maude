@@ -1,0 +1,49 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Person .
+    subsort Person < Param .
+
+    --- Khai bao cac hang so (Constants)
+    ops ann amy andy amelia linda gavin steve spongebob : -> Person [ctor] .
+
+    --- Khai bao cac vi tu (Predicates)
+    ops mother father grandparent : Person Person -> Pred [ctor] .
+    op shoe : Person -> Pred [ctor] .
+
+    --- Background Knowledge (BK)
+    eq BK =
+        mother(ann, amy)
+        mother(ann, andy)
+        mother(amy, amelia)
+        mother(linda, gavin)
+        father(steve, amy)
+        father(steve, andy)
+        father(gavin, amelia)
+        father(andy, spongebob) .
+
+    --- Positive Examples (POS)
+    eq POS =
+        grandparent(ann, amelia)
+        grandparent(steve, amelia)
+        grandparent(ann, spongebob)
+        grandparent(steve, spongebob)
+        grandparent(linda, amelia) .
+
+    --- Negative Examples (NEG) - Trong (Empty list)
+
+    vars P Q R : Pred .
+    vars A B C : Person .
+
+    --- Metarules (Bao gom Identity rule va Chain rule)
+    eq METARULES =
+        (P(A,B) :- (Q(A,B)))
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() .
+red learn(1) .

@@ -1,0 +1,31 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sorts Num ConstNum FreeNum .
+    
+    subsorts ConstNum FreeNum < Num < Param .
+    
+    subsort ConstNum < ConstVariable .
+    subsort FreeNum < FreeVariable .
+
+    ops 1 2 3 4 : -> Num [ctor] .
+    op p : Num Num -> Pred [ctor] .
+
+    eq POS = p(1, 2) p(1, 3) p(1, 4) p(1, 1) p(2, 2) p(4, 4) .
+    eq NEG = p(2, 4) p(3, 4) p(3, 1) .
+
+    vars C1 C2 : ConstNum .   
+    vars F1 F2 : FreeNum .   
+    vars P : Pred .
+
+
+    eq METARULES =
+        (P(C1, F1) :- )
+        (P(F2, C2) :- )
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() . 
