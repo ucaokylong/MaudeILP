@@ -52,13 +52,5 @@ endfm
 
 select MAUDE-ILP .
 --- red learn(1) .
---- red learn(2) .
-red learn(3) .
---- red learn(4) .
---- red learn(5) .
---- red learn(6) .
---- red learn(7) .
---- red learn(8) .
---- red learn(9) .
---- red learn(10) .
---- red learn(20) .
+red learn(2) .
+--- red learn(3) .

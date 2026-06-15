@@ -17,7 +17,7 @@ fmod ILP-PROBLEM is
     eq NEG = p(2, 4) p(3, 4) p(3, 1) .
 
     vars C1 C2 : ConstNum .   
-    vars F1 F2 : FreeNum .   
+    vars F1 F2 : Num .   
     vars P : Pred .
 
 

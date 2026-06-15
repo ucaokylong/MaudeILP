@@ -57,6 +57,7 @@ fmod RULE is
     subsort Literal < Head .
     subsort LiteralList < Body .
     op _:-_ : Head Body -> Rule [prec 120].
+    --- Rule built just from Head
     op _:- : Head -> Rule [prec 110].
 endfm
 
@@ -73,6 +74,7 @@ endfm
 
 fmod ILP-DEFINITION-INPUT is
     pr RULE-LIST .
+    
     ops BK POS NEG : -> PredList .
     op METARULES : -> RuleList .
 endfm
@@ -112,6 +114,7 @@ endfm
 
 fmod MODULE-HANDLING is
     pr META-LEVEL .
+
     vars EqS : EquationSet .
     vars AtS : AttrSet .
     vars C : Constant .
@@ -132,8 +135,10 @@ endfm
 
 fmod TERM-SET is
     pr META-LEVEL .
+
     sort TermSet .
     subsort Term < TermSet .
+
     op emptyTS : -> TermSet [ctor] .
     op _|_ : TermSet TermSet -> TermSet [ctor assoc comm id: emptyTS format (d n d d)] .
     eq X:Term | X:Term = X:Term .
@@ -141,6 +146,7 @@ fmod TERM-SET is
     op _in_ : Term TermSet -> Bool .
     eq T:Term in (T:Term | TS:TermSet) = true .
     eq T:Term in TS:TermSet = false [owise] .
+
     op TermSet : TermList -> TermSet .
     eq TermSet(empty) = emptyTS .
     eq TermSet((T:Term,TL:TermList)) = T:Term | TermSet(TL:TermList) .
@@ -166,8 +172,10 @@ endfm
 
 fmod META-LITERAL is
     pr META-TERM-EXT .
+
     sorts MetaLiteral BoundLiteral GroundLiteral .
     subsorts MetaLiteral GroundLiteral < BoundLiteral .
+    --- [TODO] Prefer using _(_)
     op _<>_ : Qid NeTermList -> BoundLiteral .
     op _<>_ : Variable NeVarList -> MetaLiteral .
     op _<>_ : Qid NeGroundTermList -> GroundLiteral .
@@ -175,30 +183,26 @@ fmod META-LITERAL is
     vars NeGTL : NeGroundTermList .
     vars NeTL : NeTermList .
     vars Q : Qid .
-    
+
     op getSOVar : BoundLiteral -> Qid .
     op getSOVar : GroundLiteral -> Qid .
     op getSOVar : MetaLiteral -> Variable .
     eq getSOVar(Q <> NeTL) = Q .
-    
+
     op getFOVars : BoundLiteral -> NeTermList .
     op getFOVars : GroundLiteral -> NeGroundTermList .
     op getFOVars : MetaLiteral -> NeVarList .
     eq getFOVars(Q <> NeTL) = NeTL .
-    
+
     op getNumOfAriry : BoundLiteral -> Nat .
     eq getNumOfAriry(Q <> NeTL) = sizeTL(NeTL) .
-    
+
     op toGroundTerm : GroundLiteral -> GroundTerm .
     eq toGroundTerm(Q <> NeGTL) = Q[NeGTL] .
-    
-    op toTerm : BoundLiteral -> Term .
-    eq toTerm(Q <> NeTL) = Q[NeTL] .
 
     op hasSOVarOnly : BoundLiteral -> Bool .
     eq hasSOVarOnly(Q <> NeGTL) = Q :: Variable .
-    eq hasSOVarOnly(Q <> NeTL) = false [owise] .
-    
+
     op isGroundLiteral : BoundLiteral -> Bool .
     eq isGroundLiteral(Q <> NeGTL) = not (Q :: Variable) .
     eq isGroundLiteral(Q <> NeTL) = false .
@@ -222,15 +226,19 @@ fmod META-LITERAL-LIST is
     op __ : GroundLiteralList GroundLiteralList -> GroundLiteralList [ctor ditto] .
     op __ : NeGroundLiteralList GroundLiteralList -> NeGroundLiteralList [ctor ditto] .
     op __ : GroundLiteralList NeGroundLiteralList -> NeGroundLiteralList [ctor ditto] .
+
+    --- Ép kiểu nil về MetaLiteralList để không bị giáng cấp Rule
     op nil : -> MetaLiteralList .
 endfm
 
 fmod META-RULE is
     pr META-LITERAL-LIST .
+
     sorts MetaRule BoundRule .
     subsort MetaRule < BoundRule .
     op _:-_ : MetaLiteral MetaLiteralList -> MetaRule .
     op _:-_ : BoundLiteral BoundLiteralList -> BoundRule .
+
     op getHead : MetaRule -> MetaLiteral .
     op getHead : BoundRule -> BoundLiteral .
     op getBody : MetaRule -> MetaLiteralList .
@@ -243,45 +251,12 @@ view BoundRule from TRIV to META-RULE is
     sort Elt to BoundRule .
 endv
 
-fmod RENAME-VARS is
-    pr META-TERM-EXT .
-    pr META-RULE .
-    pr CONVERSION .
-
-    vars V : Variable .
-    vars N : Nat .
-    vars ML : MetaLiteral .
-    vars MLL : MetaLiteralList .
-    vars S S1 S2 : String .
-    vars Pos : Nat .
-
-    op renameVar : Variable Nat -> Variable .
-    ceq renameVar(V, N) = qid(S1 + string(N, 10) + ":" + S2)
-      if S := string(V)
-      /\ Pos := find(S, ":", 0)
-      /\ S1 := substr(S, 0, Pos)
-      /\ S2 := substr(S, Pos + 1, length(S)) .
-
-    op renameNeVarList : NeVarList Nat -> NeVarList .
-    eq renameNeVarList(V:Variable, N) = renameVar(V:Variable, N) .
-    eq renameNeVarList((V:Variable, VL:NeVarList), N) = renameVar(V:Variable, N), renameNeVarList(VL:NeVarList, N) .
-
-    op renameVarsML : MetaLiteral Nat -> MetaLiteral .
-    eq renameVarsML(V:Variable <> VL:NeVarList, N) = renameVar(V:Variable, N) <> renameNeVarList(VL:NeVarList, N) .
-
-    op renameVarsMLL : MetaLiteralList Nat -> MetaLiteralList .
-    eq renameVarsMLL(nil, N) = nil .
-    eq renameVarsMLL(ML MLL, N) = renameVarsML(ML, N) renameVarsMLL(MLL, N) .
-
-    op renameVarsMR : MetaRule Nat -> MetaRule .
-    eq renameVarsMR(ML :- MLL, N) = renameVarsML(ML, N) :- renameVarsMLL(MLL, N) .
-endfm
-
 fmod META-RULE-SET is
     pr SET{BoundRule} * (
         sort NeSet{BoundRule} to NeBoundRuleSet, 
         sort Set{BoundRule} to BoundRuleSet
     ) .
+
     sorts NeMetaRuleSet MetaRuleSet .
     subsorts MetaRule < NeMetaRuleSet < NeBoundRuleSet .
     subsorts NeMetaRuleSet < MetaRuleSet < BoundRuleSet .
@@ -304,6 +279,7 @@ fmod PARSING is
     pr META-RULE-SET .
     pr CONVERSION .
     
+    vars NeGTL : NeGroundTermList .
     vars GLit : GroundLiteral .
     vars NeTL : NeTermList .
     vars EQ : Equation .
@@ -313,23 +289,29 @@ fmod PARSING is
     vars M : Module .
     vars Q : Qid .
     vars N : Nat .
-    vars C : Constant .
 
     op parseItems : Module Qid -> TermSet .
     ceq parseItems(M, Q) = parseItems*(rhsEq(EQ)) if EQ := getEqsOfQid(M, Q) .
     eq parseItems(M, Q) = emptyTS .
+
     op parseItems* : Term -> TermSet .
     eq parseItems*('__[T, T']) = T | parseItems*(T') .
+
+
     eq parseItems*(T) = T [owise] .
     
+    --- [TODO] Checking semantics of parameters in meta rules
     op parseRules : Module Qid -> MetaRuleSet .
     ceq parseRules(M, Q) = parseRules*(rhsEq(EQ)) if EQ := getEqsOfQid(M, Q) .
     eq parseRules(M, Q) = empty [owise] .
+
     op parseRules* : Term -> MetaRuleSet .
     eq parseRules*('__[T, T']) = parseRule(T), parseRules*(T') .
     eq parseRules*(T) = parseRule(T) .
+
     op parseRule : Term -> MetaRuleSet .
-    eq parseRule('_:-_[T, T']) = parseLiteral(T) :- parseBody(T') .
+    eq parseRule('_:-_[T, T']) = parseLiteral(T) :- parseBody(T') . 
+    --- Special case for rules without body 
     eq parseRule('_:-[T]) = parseLiteral(T) :- nil .
     eq parseRule(T) = empty [owise] .
 
@@ -344,17 +326,15 @@ fmod PARSING is
     eq parseBody('__[T, T']) = parseLiteral(T) parseBody(T') .
     eq parseBody(T) = parseLiteral(T) [owise] .
 
-    op getPred : Term -> Qid .
-    op getArgs : Term -> TermList .
-    op getNumOfArgs : Term -> Nat .
-    eq getPred(Q[NeTL]) = Q .
-    eq getArgs(Q[NeTL]) = NeTL .
-    eq getNumOfArgs(Q[NeTL]) = sizeTL(NeTL) .
-    
-    eq getPred(C) = getName(C) .
-    eq getArgs(C) = empty .
-    eq getNumOfArgs(C) = 0 .
+    --- analyze the ground term of a predicate
+    op getPred : GroundTerm -> Qid .
+    op getArgs : GroundTerm -> NeGroundTermList .
+    op getNumOfArgs : GroundTerm -> Nat .
+    eq getPred(Q[NeGTL]) = Q .
+    eq getArgs(Q[NeGTL]) = NeGTL .
+    eq getNumOfArgs(Q[NeGTL]) = sizeTL(NeGTL) .
 
+    --- checking whether a ground literal is in BK
     op hasElt : GroundLiteral TermSet -> Bool .
     eq hasElt(GLit, TS) = toGroundTerm(GLit) in TS .
 
@@ -364,6 +344,7 @@ endfm
 
 fmod ILP-PARSING-INPUT is
     pr PARSING .
+
     op getBK`(`) : -> TermSet .
     op getPOS`(`) : -> TermSet .
     op getNEG`(`) : -> TermSet .
@@ -387,6 +368,7 @@ fmod ENV is
         sort Entry{Var,BindVal} to Bind,
         sort Map{Var,BindVal} to Env
     ) .
+
     sorts ErrEnv Env&Err .
     subsort Env ErrEnv < Env&Err .
     op errEnv : -> ErrEnv [ctor] .
@@ -397,6 +379,7 @@ fmod ENV is
     vars BV : BindVal .
     vars V : Variable .
     vars ENV : Env .
+
     op _**<<_ : Qid Env -> BindVal .
     ceq V **<< ENV = (if BV? == undefined then V else BV? fi) if BV? := ENV[V] .
     eq BV **<< ENV = BV [owise] .
@@ -405,6 +388,7 @@ endfm
 fmod RULE-AND-ENV is
     pr META-RULE-SET .
     pr ENV .
+
     sort Rule&Env .
     op [_,_] : BoundRule Env -> Rule&Env .
 endfm
@@ -424,21 +408,10 @@ fmod GOAL is
     pr META-TERM-EXT .
     pr BOUND .
     pr PATH .    
-    pr META-RULE .
-    pr ENV .
-
-    sorts MetaContext BoundContext .
-    op mctx : BoundLiteral BoundLiteralList MetaRule Env Nat -> MetaContext [ctor] .
-    op bctx : BoundLiteral BoundLiteralList BoundRule Env Nat -> BoundContext [ctor] .
-    
-    sort ContextStack .
-    subsorts MetaContext BoundContext < ContextStack .
-    op emptyStack : -> ContextStack [ctor] .
-    op _|_ : ContextStack ContextStack -> ContextStack [ctor assoc id: emptyStack] .
 
     sort Goal .
-    op {goal:_,rules:_,path:_,depth:_,stack:_} : Term BoundRuleSet Path Bound ContextStack -> Goal .
-    op {lits:_,facts:_,path:_,depth:_,stack:_} : BoundLiteralList TermSet Path Bound ContextStack -> Goal .
+    op {goal:_,rules:_,path:_,depth:_} : GroundTerm BoundRuleSet Path Bound -> Goal .
+    op {lits:_,facts:_,path:_,depth:_} : BoundLiteralList TermSet Path Bound -> Goal .
 endfm
 
 view Goal from TRIV to GOAL is
@@ -464,14 +437,19 @@ fmod ILP-OUTPUT is
     vars VL : VarList .
     vars PATH : Path .
     vars ENV : Env .
-    vars T' : Term .
+    vars T' : Term . --- Safe variable for storing the result of ENV lookup, ensuring that we don't accidentally overwrite any variables during the application process
     vars S : Sort .
+    --- ==========================================
+    --- Support functions to apply ENV bindings to the literals in the path, ensuring that constants are preserved and free variables are handled correctly
+    --- ==========================================
     
+    --- 1. recognise constant variables by checking if their sort is a subsort of 'ConstVariable
     op isConstantVar : Term -> Bool .
     ceq isConstantVar(V:Variable) = sortLeq(upModule('ILP-PROBLEM, false), S, 'ConstVariable) 
         if S := getType(V:Variable) .
     eq isConstantVar(T:Term) = false [owise] .
 
+    --- 2. Filter and apply ENV bindings to a TermList, replacing variables with their bound values while preserving constants
     op applyConstants : TermList Env -> TermList .
     eq applyConstants(empty, ENV) = empty .
     
@@ -480,19 +458,29 @@ fmod ILP-OUTPUT is
          then T'
          else V:Variable fi) , applyConstants(TL:TermList, ENV)
     if T' := (V:Variable **<< ENV) .
+    
     eq applyConstants((T:Term, TL:TermList), ENV) = T:Term , applyConstants(TL:TermList, ENV) [owise] .
+
+    --- ==========================================
+    --- Function to build the clause set from the path, applying constants where necessary
+    --- ==========================================
 
     op buildClauseSet : Path -> BoundRuleSet .
     eq buildClauseSet(nil) = empty .
     eq buildClauseSet([MR, ENV] PATH) = buildClause(MR, ENV), buildClauseSet(PATH) .
+
     op buildClause : MetaRule Env -> BoundRule .
     eq buildClause(ML :- MLL, ENV) = buildBoundLiteral(ML, ENV) :- buildBoundLiteralList(MLL, ENV) .
+
     op buildBoundLiteralList : BoundLiteralList Env -> BoundLiteralList .
     eq buildBoundLiteralList(nil, ENV) = nil .
     eq buildBoundLiteralList(ML MLL, ENV) = buildBoundLiteral(ML, ENV) buildBoundLiteralList(MLL, ENV) .
+
+    --- 3. Main function to build a bound literal from a meta literal and an ENV, applying the bindings while preserving constants
     op buildBoundLiteral : BoundLiteral Env -> BoundLiteral .
     eq buildBoundLiteral(SOVar <> VL, ENV) = (SOVar **<< ENV) <> applyConstants(VL, ENV) .
-    
+
+    --- for checking coverage of negatives
     op buildClauseSet2 : Path -> BoundRuleSet .
     eq buildClauseSet2(nil) = empty .
     eq buildClauseSet2([BR, ENV] PATH) = BR, buildClauseSet2(PATH) .
@@ -509,11 +497,17 @@ fmod ENV-APPLYING is
     vars ENV : Env .
     vars T : Term .
     vars Q : Qid .
+
+    --- applying to a literal
     op _<<_ : BoundLiteral Env -> BoundLiteral .
     eq (Q <> TL) << ENV = (Q **<< ENV) <> (TL *<< ENV) .
+    
+    --- applying to a termlist
     op _*<<_ : TermList Env -> TermList .
     eq (T, TL) *<< ENV = (T **<< ENV), (TL *<< ENV) .
     eq (empty *<< ENV) = empty .
+    
+    --- applying to a qid
     op _**<<_ : Qid Env -> BindVal .
     ceq V **<< ENV = (if BV? == undefined then V else BV? fi) if BV? := ENV[V] .
     eq BV **<< ENV = BV [owise] .
@@ -529,9 +523,10 @@ fmod LITERAL-MATCHING is
     vars T T' : Term .
     vars G : Term .
     vars S : Sort .
-    vars BV? : [BindVal] .
-    vars ENV : Env .
-
+    
+    --- For example:
+    --- G: 'parent('ann.Person, 'amelia.Person)
+    --- BL: 'Q:Pred('ann.Person, 'C:Person)
     op matchLiteral : Term BoundLiteral -> Env&Err .
     ceq matchLiteral(G, BL) = 
         if getSOVar(BL) :: Variable then 
@@ -540,45 +535,34 @@ fmod LITERAL-MATCHING is
             if getSOVar(BL) == getPred(G) then
                 empty
             else
-               errEnv
+                errEnv
             fi 
         fi,
         matchArgs(getArgs(G), getFOVars(BL))
     if getNumOfArgs(G) == getNumOfAriry(BL) .
-    
     eq matchLiteral(G, BL) = errEnv [owise] .
 
-    --- op isFreeVar : Term -> Bool .
-    --- ceq isFreeVar(V:Variable) = sortLeq(upModule('ILP-PROBLEM, false), S, 'FreeVariable) 
-    ---     if S := getType(V:Variable) .
-    --- eq isFreeVar(T:Term) = false [owise] .
+    op isFreeVar : Term -> Bool .
+    ceq isFreeVar(V:Variable) = sortLeq(upModule('ILP-PROBLEM, false), S, 'FreeVariable) 
+        if S := getType(V:Variable) .
+    eq isFreeVar(T:Term) = false [owise] .
 
     op matchArgs : TermList TermList -> Env&Err .
-    op matchArgs* : TermList TermList Env -> Env&Err .
-    
-    eq matchArgs(TL, TL') = matchArgs*(TL, TL', empty) .
-
-    eq matchArgs*(empty, empty, ENV) = ENV .
-    ceq matchArgs*((T, TL), (T', TL'), ENV) = 
+    eq matchArgs(empty, empty) = empty .
+    eq matchArgs((T, TL), (T', TL')) = 
         if T' :: Variable then 
-            if BV? == undefined then
-                matchArgs*(TL, TL', (ENV, (T' |-> T)))
+            if isFreeVar(T') then
+                matchArgs(TL:TermList, TL':TermList)
             else
-                if BV? == T then
-                    matchArgs*(TL, TL', ENV)
-                else
-                    errEnv
-                fi
+                (T' |-> T), matchArgs(TL, TL')
             fi
         else
             if T' == T then
-                matchArgs*(TL, TL', ENV)
+                matchArgs(TL, TL')
             else
                 errEnv
             fi
-        fi 
-    if BV? := ENV[T'] .
-    eq matchArgs*(TL, TL', ENV) = errEnv [owise] .
+        fi .
 endfm
 
 fmod GOAL-HANDLING is
@@ -586,160 +570,122 @@ fmod GOAL-HANDLING is
     pr ENV-APPLYING .
     pr ILP-OUTPUT .
     pr GOAL-LIST .
-    pr RENAME-VARS .
 
     vars POS NEG BK BK' : TermSet .
+    --- vars MRS MRS' : MetaRuleSet .
     vars MRS MRS' : BoundRuleSet .
     vars BRS BRS' : BoundRuleSet .
+    --- vars MLL : MetaLiteralList .
     vars MLL : BoundLiteralList .
     vars BLL : BoundLiteralList .
     vars BL BL' : BoundLiteral .
     vars BRS? : [BoundRuleSet] .
     vars ML : MetaLiteral .
     vars SOVar : Variable .
-    vars ENV? ExtractedEnv : Env&Err .
-    vars BR ParentBR SubBR : BoundRule .
-    vars MR RenamedMR ParentMR SubMR : MetaRule .
+    vars ENV? : Env&Err .
+    vars BR : BoundRule .
+    vars MR : MetaRule .
     vars G Fact : Term .
     vars GL : GoalList .
     vars PATH : Path .
-    vars N N' ParentDepth : Nat .
-    vars ENV ParentEnv SubEnv : Env .
-    vars STACK : ContextStack .
+    vars N N' : Nat .
+    vars ENV : Env .
 
     ----------------------------------------------------------
     --- Checking coverage
     ----------------------------------------------------------
+    --- covered by BK and rules
     op isCovered : Term BoundRuleSet TermSet Nat -> Bool .
     eq isCovered(G, BRS, BK, N) = if (G in BK) then true else isCoveredByRules(G, BRS, BK, N) fi .
-    
+
+    --- covered by rules
     op isCoveredByRules : Term BoundRuleSet TermSet Nat -> Bool .
     ceq isCoveredByRules(G, BRS, BK, N) = BRS' =/= empty 
-    if BRS' := checkGoals({goal: G, rules: BRS, path: nil, depth: 0, stack: emptyStack}, BK, BRS, N) .
-    
+    if BRS' := checkGoals({goal: G, rules: BRS, path: nil, depth: 0}, BK, BRS, N) .
+
+    --- cover any negative
     op coverAnyNEG : BoundRuleSet TermSet TermSet Nat -> Bool .
     eq coverAnyNEG(BRS, emptyTS, BK, N) = false .
     eq coverAnyNEG(BRS, G | NEG, BK, N) = if isCovered(G, BRS, BK, N) then true else coverAnyNEG(BRS, NEG, BK, N) fi .
-    
+
     ----------------------------------------------------------
     --- Handling goals to find a clause set
     ----------------------------------------------------------
     op proceedGoals : GoalList TermSet MetaRuleSet Bound TermSet -> BoundRuleSet .
     eq proceedGoals(nil, BK, MRS', N, NEG) = empty .
-    eq proceedGoals({goal: G, rules: empty, path: PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG) = proceedGoals(GL, BK, MRS', N, NEG) .
-    
-    ceq proceedGoals({goal: G, rules: (MR, MRS), path: PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG) = 
+    eq proceedGoals({goal: G, rules: empty, path: PATH, depth: N'} GL, BK, MRS', N, NEG) = proceedGoals(GL, BK, MRS', N, NEG) .
+
+    ceq proceedGoals({goal: G, rules: (MR, MRS), path: PATH, depth: N'} GL, BK, MRS', N, NEG) = 
         if ENV? == errEnv then 
-            proceedGoals({goal: G, rules: MRS, path: PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG)
+            proceedGoals({goal: G, rules: MRS, path: PATH, depth: N'} GL, BK, MRS', N, NEG)
         else 
             proceedGoals(
-                {lits: getBody(RenamedMR), facts: BK, path: [RenamedMR, ENV?] PATH, depth: N', stack: STACK} 
-                {goal: G, rules: MRS, path: PATH, depth: N', stack: STACK} 
+                {lits: getBody(MR), facts: BK, path: [MR, ENV?] PATH, depth: N'} 
+                {goal: G, rules: MRS, path: PATH, depth: N'} 
                 GL, BK, MRS', N, NEG
             )
         fi
-    if RenamedMR := renameVarsMR(MR, N')
-    /\ ENV? := matchLiteral(G, getHead(RenamedMR)) .
+    if ENV? := matchLiteral(G, getHead(MR)) .
     
-    ceq proceedGoals({lits: nil, facts: BK', path: PATH, depth: N', stack: emptyStack} GL, BK, MRS', N, NEG) =
+    ceq proceedGoals({lits: nil, facts: BK', path: PATH, depth: N'} GL, BK, MRS', N, NEG) =
         if coverAnyNEG(BRS, NEG, BK, N) then 
             proceedGoals(GL, BK, MRS', N, NEG)
         else 
             BRS 
         fi
     if BRS := buildClauseSet(PATH) .
-
-    ceq proceedGoals({lits: nil, facts: BK', path: [SubMR, SubEnv] PATH, depth: N', stack: mctx(BL, MLL, ParentMR, ParentEnv, ParentDepth) | STACK} GL, BK, MRS', N, NEG) =
-        if ExtractedEnv == errEnv then
-            proceedGoals(GL, BK, MRS', N, NEG)
-        else
-            proceedGoals(
-                {
-                    lits: MLL, 
-                    facts: BK, 
-                    path: [ParentMR, (ParentEnv, ExtractedEnv)] [SubMR, SubEnv] PATH, 
-                    depth: ParentDepth, 
-                    stack: STACK
-                }
-                GL, BK, MRS', N, NEG
-            )
-        fi
-    if ExtractedEnv := matchArgs(getArgs(toTerm(BL << SubEnv)), getFOVars(BL)) .
-
-    ceq proceedGoals({lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG) = 
+    
+    ceq proceedGoals({lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N'} GL, BK, MRS', N, NEG) = 
         if isGroundLiteral(BL) then
+            --- fully instantiated
             if (hasElt(BL, BK)) then
-                proceedGoals({lits: MLL, facts: BK, path: [MR, ENV] PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG)
+                proceedGoals({lits: MLL, facts: BK, path: [MR, ENV] PATH, depth: N'} GL, BK, MRS', N, NEG)
             else
-                if (N' < N) and isRecursiveCall(MR, ENV, BL) then
-                    if (MLL == nil) then
-                        --- [Optimize]: (Put Recursive Call to be the last element of GoalList)
-                        proceedGoals(
-                            GL {goal: toTerm(BL), rules: MRS', path: [MR, ENV] PATH, depth: (N' + 1), stack: STACK}, 
-                            BK, MRS', N, NEG
-                        )
-                    else
-                        proceedGoals(
-                            GL {goal: toTerm(BL), rules: MRS', path: PATH, depth: (N' + 1), stack: mctx(BL, MLL, MR, ENV, N') | STACK}, 
-                            BK, MRS', N, NEG
-                        )
-                    fi
+                --- handle recursive call if the current literal is at the end
+                if (N' < N) and (MLL == nil) and isRecursiveCall(MR, ENV, BL) then
+                    proceedGoals(
+                        {goal: toGroundTerm(BL), rules: MRS', path: [MR, ENV] PATH, depth: (N' + 1)}
+                        GL, BK, MRS', N, NEG
+                    )
                 else
                     proceedGoals(GL, BK, MRS', N, NEG)
                 fi
             fi
         else
-            proceedGoalsWithFacts({lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG)
+            proceedGoalsWithFacts({lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N'} GL, BK, MRS', N, NEG)
         fi
     if BL := (ML << ENV) .
 
     op isRecursiveCall : MetaRule Env BoundLiteral -> Bool .
     ceq isRecursiveCall(MR, ENV, BL) = getSOVar(BL) == getSOVar(BL') and (BL =/= BL')
     if BL' := (getHead(MR) << ENV) .
-    
+
     op proceedGoalsWithFacts : GoalList TermSet MetaRuleSet Bound TermSet -> BoundRuleSet .
-    
-    ceq proceedGoalsWithFacts({lits: ML MLL, facts: emptyTS, path: [MR, ENV] PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG) = 
-        if (N' < N) and (size(getBody(MR)) > 1) then
-            if (MLL == nil) and hasSOVarOnly(BL) then
-                --- Optimize: (Put Predicate to be the last element of GoalList)
-                proceedGoals(
-                    {
-                        goal: toTerm(BL << (getSOVar(BL) |-> getPredInvName(N'))), 
-                        rules: MRS', 
-                        path: [MR, (ENV, getSOVar(BL) |-> getPredInvName(N'))] PATH, 
-                        depth: (N' + 1),
-                        stack: STACK
-                    }
-                    GL
-                    , 
-                    BK, MRS', N, NEG
-                )
-            else
-                proceedGoals(
-                    GL
-                    {
-                        goal: toTerm(BL << (getSOVar(BL) |-> getPredInvName(N'))), 
-                        rules: MRS', 
-                        path: PATH, 
-                        depth: (N' + 1),
-                        stack: mctx(BL, MLL, MR, (ENV, getSOVar(BL) |-> getPredInvName(N')), N') | STACK
-                    }, 
-                    BK, MRS', N, NEG
-                )
-            fi
+    --- no facts match OR some fact matched but that path does not hold
+    ceq proceedGoalsWithFacts({lits: ML MLL, facts: emptyTS, path: [MR, ENV] PATH, depth: N'} GL, BK, MRS', N, NEG) = 
+        if (N' < N) and hasSOVarOnly(BL) and MLL == nil and (size(getBody(MR)) > 1) then
+            --- predicate invention iff all are instantiated except for its predicate, the current literal is at the end, and the current rule is not identity
+            proceedGoals(
+                {
+                    goal: toGroundTerm(BL << (getSOVar(BL) |-> getPredInvName(N'))), 
+                    rules: MRS', 
+                    path: [MR, (ENV, getSOVar(BL) |-> getPredInvName(N'))] PATH, 
+                    depth: (N' + 1)
+                }
+                GL, BK, MRS', N, NEG
+            )
         else
             proceedGoals(GL, BK, MRS', N, NEG)
         fi 
     if BL := (ML << ENV) .
 
-    ceq proceedGoalsWithFacts({lits: ML MLL, facts: Fact | BK', path: [MR, ENV] PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG) = 
+    ceq proceedGoalsWithFacts({lits: ML MLL, facts: Fact | BK', path: [MR, ENV] PATH, depth: N'} GL, BK, MRS', N, NEG) = 
         if ENV? == errEnv then
-            proceedGoalsWithFacts({lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG)
+            proceedGoalsWithFacts({lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N'} GL, BK, MRS', N, NEG)
         else
             proceedGoals(
-                {lits: MLL, facts: BK, path: [MR, (ENV, ENV?)] PATH, depth: N', stack: STACK}
-                {lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N', stack: STACK} GL, 
+                {lits: MLL, facts: BK, path: [MR, (ENV, ENV?)] PATH, depth: N'}
+                {lits: ML MLL, facts: BK', path: [MR, ENV] PATH, depth: N'} GL, 
                 BK, MRS', N, NEG
             )
         fi
@@ -751,98 +697,55 @@ fmod GOAL-HANDLING is
     ----------------------------------------------------------
     op checkGoals : GoalList TermSet BoundRuleSet Bound -> BoundRuleSet .
     eq checkGoals(nil, BK, BRS', N) = empty .
-    eq checkGoals({goal: G, rules: empty, path: PATH, depth: N', stack: STACK} GL, BK, BRS', N) = checkGoals(GL, BK, BRS', N) .
-    
-    ceq checkGoals({goal: G, rules: (BR, BRS), path: PATH, depth: N', stack: STACK} GL, BK, BRS', N) = 
+    eq checkGoals({goal: G, rules: empty, path: PATH, depth: N'} GL, BK, BRS', N) = checkGoals(GL, BK, BRS', N) .
+
+    ceq checkGoals({goal: G, rules: (BR, BRS), path: PATH, depth: N'} GL, BK, BRS', N) = 
         if ENV? == errEnv then 
-            checkGoals({goal: G, rules: BRS, path: PATH, depth: N', stack: STACK} GL, BK, BRS', N) 
+            checkGoals({goal: G, rules: BRS, path: PATH, depth: N'} GL, BK, BRS', N) 
         else 
             checkGoals(
-                {lits: getBody(BR), facts: BK, path: [BR, ENV?] PATH, depth: N', stack: STACK} 
-                {goal: G, rules: BRS, path: PATH, depth: N', stack: STACK} 
+                {lits: getBody(BR), facts: BK, path: [BR, ENV?] PATH, depth: N'} 
+                {goal: G, rules: BRS, path: PATH, depth: N'} 
                 GL, BK, BRS', N
             )
         fi
     if ENV? := matchLiteral(G, getHead(BR)) .
 
-    eq checkGoals({lits: nil, facts: BK', path: PATH, depth: N', stack: emptyStack} GL, BK, BRS', N) = buildClauseSet2(PATH) .
-
-    ceq checkGoals({lits: nil, facts: BK', path: [SubBR, SubEnv] PATH, depth: N', stack: bctx(BL, BLL, ParentBR, ParentEnv, ParentDepth) | STACK} GL, BK, BRS', N) =
-        if ExtractedEnv == errEnv then
-            checkGoals(GL, BK, BRS', N)
-        else
-            checkGoals(
-                {
-                    lits: BLL, 
-                    facts: BK, 
-                    path: [ParentBR, (ParentEnv, ExtractedEnv)] [SubBR, SubEnv] PATH, 
-                    depth: ParentDepth, 
-                    stack: STACK
-                }
-                GL, BK, BRS', N
-            )
-        fi
-    if ExtractedEnv := matchArgs(getArgs(toTerm(BL << SubEnv)), getFOVars(BL)) .
-
-    ceq checkGoals({lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N', stack: STACK} GL, BK, BRS', N) = 
+    eq checkGoals({lits: nil, facts: BK', path: PATH, depth: N'} GL, BK, BRS', N) = buildClauseSet2(PATH) .
+    ceq checkGoals({lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N'} GL, BK, BRS', N) = 
         if isGroundLiteral(BL') then
+            --- fully instantiated
             if (hasElt(BL', BK)) then
-                checkGoals({lits: BLL, facts: BK', path: [BR, ENV] PATH, depth: N', stack: STACK} GL, BK, BRS', N)
+                checkGoals({lits: BLL, facts: BK', path: [BR, ENV] PATH, depth: N'} GL, BK, BRS', N)
             else
-                if (N' < N) and hasRuleByQid(getSOVar(BL'), BRS') then
-                    if (BLL == nil) then
-                        checkGoals(
-                            GL {goal: toTerm(BL'), rules: BRS', path: [BR, ENV] PATH, depth: (N' + 1), stack: STACK}, 
-                            BK, BRS', N
-                        )
-                    else
-                        checkGoals(
-                            GL {goal: toTerm(BL'), rules: BRS', path: PATH, depth: (N' + 1), stack: bctx(BL', BLL, BR, ENV, N') | STACK}, 
-                            BK, BRS', N
-                        )
-                    fi
+                --- if (N' < N) and isPredInv(getSOVar(BL'), BRS') and (BLL == nil) then
+                --- support recursive calls as well as predication invention
+                if (N' < N) and (BLL == nil) and hasRuleByQid(getSOVar(BL'), BRS') then
+                    checkGoals(
+                        {goal: toGroundTerm(BL'), rules: BRS', path: [BR, ENV] PATH, depth: (N' + 1)}
+                        GL, BK, BRS', N
+                    )
                 else
                     checkGoals(GL, BK, BRS', N)
                 fi 
             fi
         else
-            checkGoalsWithFacts({lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N', stack: STACK} GL, BK, BRS', N)
-        fi
-    if BL' := (BL << ENV) .
-    
-    op checkGoalsWithFacts : GoalList TermSet BoundRuleSet Bound -> BoundRuleSet .
-    
-    ceq checkGoalsWithFacts({lits: BL BLL, facts: emptyTS, path: [BR, ENV] PATH, depth: N', stack: STACK} GL, BK, BRS', N) = 
-        if (N' < N) and hasRuleByQid(getSOVar(BL'), BRS') then
-            if (BLL == nil) then
-                checkGoals(
-                    GL {goal: toTerm(BL'), rules: BRS', path: [BR, ENV] PATH, depth: (N' + 1), stack: STACK}, 
-                    BK, BRS', N
-                )
-            else
-                checkGoals(
-                    GL {
-                        goal: toTerm(BL'), 
-                        rules: BRS', 
-                        path: PATH, 
-                        depth: (N' + 1), 
-                        stack: bctx(BL', BLL, BR, ENV, N') | STACK
-                    }, 
-                    BK, BRS', N
-                )
-            fi
-        else
-            checkGoals(GL, BK, BRS', N)
+            checkGoalsWithFacts({lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N'} GL, BK, BRS', N)
         fi
     if BL' := (BL << ENV) .
 
-    ceq checkGoalsWithFacts({lits: BL BLL, facts: Fact | BK', path: [BR, ENV] PATH, depth: N', stack: STACK} GL, BK, BRS', N) = 
+    op checkGoalsWithFacts : GoalList TermSet BoundRuleSet Bound -> BoundRuleSet .
+    ceq checkGoalsWithFacts({lits: BL BLL, facts: emptyTS, path: [BR, ENV] PATH, depth: N'} GL, BK, BRS', N) = 
+        checkGoals(GL, BK, BRS', N)
+    if BL' := (BL << ENV) .
+
+    ceq checkGoalsWithFacts({lits: BL BLL, facts: Fact | BK', path: [BR, ENV] PATH, depth: N'} GL, BK, BRS', N) = 
         if ENV? == errEnv then
-            checkGoalsWithFacts({lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N', stack: STACK} GL, BK, BRS', N)
+            checkGoalsWithFacts({lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N'} GL, BK, BRS', N)
         else
             checkGoals(
-                {lits: BLL, facts: BK, path: [BR, (ENV, ENV?)] PATH, depth: N', stack: STACK}
-                {lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N', stack: STACK} GL, 
+                {lits: BLL, facts: BK, path: [BR, (ENV, ENV?)] PATH, depth: N'}
+                {lits: BL BLL, facts: BK', path: [BR, ENV] PATH, depth: N'} GL, 
                 BK, BRS', N
             )
         fi
@@ -854,35 +757,36 @@ fmod MAUDE-ILP is
     pr ILP-PARSING-INPUT .
     pr GOAL-HANDLING .
     pr ILP-OUTPUT .
+
     vars MRS MRS' : MetaRuleSet .
     vars POS NEG BK : TermSet .
     vars BRS BRS' : BoundRuleSet .
     vars G : Term .
     vars N : Nat .
     
+    --- no predicate invention or recursive calls by default 
     op learn`(`) : -> BoundRuleSet .
     eq learn() = learn(0) .
 
+    --- a bound for predicate invention and recursive calls
     op learn : Bound -> BoundRuleSet .
     eq learn(N) = learn(getPOS(), getNEG(), getMetaRules(), getBK(), N, empty) .
     
     op learn : TermSet TermSet MetaRuleSet TermSet Bound BoundRuleSet -> BoundRuleSet .
     eq learn(emptyTS, NEG, MRS, BK, N, BRS') = BRS' .
-    
     eq learn(G | POS, NEG, MRS, BK, N, BRS') = 
         if isCovered(G, BRS', BK, N) then
             learn(POS, NEG, MRS, BK, N, BRS')
         else
             learn*(G | POS, NEG, MRS, BK, N, BRS')
         fi .
-        
+
     op learn* : TermSet TermSet MetaRuleSet TermSet Bound BoundRuleSet -> BoundRuleSet .
-    
     ceq learn*(G | POS, NEG, MRS, BK, N, BRS') =
         if BRS == empty then
             empty
         else
             learn(POS, NEG, MRS, BK, N, (BRS, BRS'))
         fi
-    if BRS := proceedGoals({goal: G, rules: MRS, path: nil, depth: 0, stack: emptyStack}, BK, MRS, N, NEG) .
+    if BRS := proceedGoals({goal: G, rules: MRS, path: nil, depth: 0}, BK, MRS, N, NEG) .
 endfm
