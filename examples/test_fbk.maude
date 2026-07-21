@@ -1,0 +1,76 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+    pr NAT .
+
+    --- Define common data types
+    sort Entity .
+    subsort Entity < Param .
+    sorts Item MyNat .
+    subsorts Item MyNat < Entity .
+
+    --- Constants
+    ops apple banana cherry : -> Item [ctor] .
+    op n : Nat -> MyNat [ctor] .
+
+    --- The '?' token for unknown outputs in Functional BK
+    op ? : -> Entity [ctor] .
+
+    --- =========================================================
+    --- PREDICATE DECLARATIONS
+    --- =========================================================
+    --- Regular Predicates (Static BK & Target)
+    ops final_price base_price : Entity Entity -> Pred [ctor] .
+
+    --- Functional Predicates (Belonging to FuncPred sort)
+    ops add_tax double_price square_price : Entity Entity -> FuncPred [ctor] .
+
+    --- =========================================================
+    --- 1. FUNCTIONAL BK (Using 'fbk' keyword on FuncPred sort)
+    --- =========================================================
+    
+    --- FBK 1: add_tax (Adds 5 to the price)
+    eq fbk( add_tax(n(X:Nat), ?) ) = add_tax(n(X:Nat), n(X:Nat + 5)) .
+    eq fbk( add_tax(n(X:Nat), n(Y:Nat)) ) = (Y:Nat == X:Nat + 5) .
+
+    --- FBK 2: double_price (Multiplies the price by 2)
+    eq fbk( double_price(n(X:Nat), ?) ) = double_price(n(X:Nat), n(X:Nat * 2)) .
+    eq fbk( double_price(n(X:Nat), n(Y:Nat)) ) = (Y:Nat == X:Nat * 2) .
+
+    --- FBK 3: square_price (Multiplies the price by itself)
+    eq fbk( square_price(n(X:Nat), ?) ) = square_price(n(X:Nat), n(X:Nat * X:Nat)) .
+    eq fbk( square_price(n(X:Nat), n(Y:Nat)) ) = (Y:Nat == X:Nat * X:Nat) .
+
+    --- =========================================================
+    --- 2. STATIC BK (Database Facts)
+    --- =========================================================
+    eq BK =
+        base_price(apple, n(10))
+        base_price(banana, n(5))
+        base_price(cherry, n(3)) .
+
+    --- =========================================================
+    --- 3. TRAINING EXAMPLES
+    --- =========================================================
+    eq POS =
+        --- Target rule requires squaring the base price
+        --- Apple: 10 * 10 = 100
+        final_price(apple, n(100))
+        --- Banana: 5 * 5 = 25
+        final_price(banana, n(25)) .
+
+    eq NEG = 
+        --- Apple with double_price (10 * 2 = 20) instead of square
+        final_price(apple, n(20))
+        --- Banana with add_tax (5 + 5 = 10) instead of square
+        final_price(banana, n(10)) .
+
+    vars P Q R : Pred .
+    vars A B C : Entity .
+
+    --- Meta-rules
+    eq METARULES =
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        [nonexec] .
+endfm

@@ -1,0 +1,39 @@
+fmod ILP-PROBLEM is 
+    pr ILP-DEFINITION-INPUT .
+    
+    sort Person .
+    subsort Person < Param .
+
+    ops ann bob cal dawn : -> Person [ctor] .
+
+    --- 1. Vị ngữ KHÔNG giao hoán (parent)
+    op parent : Person Person -> Pred [ctor] .
+    --- 2. Vị ngữ CÓ giao hoán (sibling)
+    op sibling : Person Person -> Pred [ctor comm] .
+    --- 3. Mục tiêu cần học
+    op aunt : Person Person -> Pred [ctor] .
+
+    eq BK =
+        --- Cấu trúc gia đình: cal là cha của dawn
+        parent(cal, dawn)
+        --- cal và ann là anh em. 
+        --- LƯU Ý KỸ THỨ TỰ: cal đứng trước, ann đứng sau!
+        sibling(cal, ann) .
+
+    eq POS =
+        --- Mục tiêu: Tìm luật chứng minh ann là dì của dawn
+        aunt(ann, dawn) .
+
+    eq NEG = 
+        aunt(bob, dawn) .
+
+    vars P Q R : Pred .
+    vars A B C : Person .
+
+    eq METARULES =
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() .

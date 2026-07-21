@@ -1,0 +1,53 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+    pr NAT .  
+
+    *** 1. DATA TYPES
+    sorts NatList FuncName .
+    subsorts Nat FuncName < Param .
+    subsort NatList < Param .
+
+    op nil : -> NatList [ctor] .
+    op _|_ : NatList NatList -> NatList [ctor assoc id: nil] .
+
+    *** 2. PREDICATES (Name it whatever you want, the Core doesn't care)
+    ops f map : Param Param Param -> Pred [ctor] .
+    op mysucc : Param Param -> Pred [ctor] .
+
+    *** 3. VARIABLES
+    vars A B C F : Param .
+    vars P Q R : Pred .
+    vars X Y : Nat .
+    vars Xs Ys : NatList .
+
+    *** 4. TRAINING DATA
+    eq POS =
+        f( 1 | 2 | 3 ,   3 | 4 | 5 )
+        f( 10 | 12 | 33 | 3 | 2 | 1 ,   12 | 14 | 35 | 5 | 4 | 3 ) .
+
+    eq NEG = none . 
+    eq BK = none .
+
+    *** ---------------------------------------------------------
+    *** 5. INTERPRETED BK (IBK) - THE ELEGANT SOLUTION
+    *** ---------------------------------------------------------
+    eq IBK =
+        *** By defining the head as mysucc(X, X + 1), you are telling the 
+        *** engine's Unification algorithm to calculate the next number natively!
+        (mysucc(X, X + 1) :- empty)
+        
+        (map(nil, nil, F) :- empty)
+        (map(X | Xs, Y | Ys, F) :- (F(X, Y)) (map(Xs, Ys, F))) .
+
+    *** 6. METARULES
+    eq METARULES =
+        (P(A, B) :- (Q(A, B)))
+        (P(A, B) :- (Q(A, B, F))) 
+        (P(A, B) :- (Q(A, C)) (R(C, B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() .

@@ -35,6 +35,10 @@ fmod LITERAL is
     pr PARAM-LIST .
     sort Literal .
     op _`(_`) : Pred ParamList -> Literal .
+    
+    *** ADD THESE TWO LINES FOR HIGHER-ORDER VARIABLE SUPPORT:
+    subsort Pred < Param .
+    op _`(_`) : Param ParamList -> Literal [prec 0] .
 endfm
 
 view Literal from TRIV to LITERAL is
@@ -673,14 +677,14 @@ fmod GOAL-HANDLING is
             else
                 if (N' < N) and isRecursiveCall(MR, ENV, BL) then
                     if (MLL == nil) then
-                        --- [Optimize]
+                        --- [Optimize]: (Put Recursive Call to be the last element of GoalList)
                         proceedGoals(
-                            {goal: toTerm(BL), rules: MRS', path: [MR, ENV] PATH, depth: (N' + 1), stack: STACK} GL, 
+                            GL {goal: toTerm(BL), rules: MRS', path: [MR, ENV] PATH, depth: (N' + 1), stack: STACK}, 
                             BK, MRS', N, NEG
                         )
                     else
                         proceedGoals(
-                            {goal: toTerm(BL), rules: MRS', path: PATH, depth: (N' + 1), stack: mctx(BL, MLL, MR, ENV, N') | STACK} GL, 
+                            GL {goal: toTerm(BL), rules: MRS', path: PATH, depth: (N' + 1), stack: mctx(BL, MLL, MR, ENV, N') | STACK}, 
                             BK, MRS', N, NEG
                         )
                     fi
@@ -702,7 +706,7 @@ fmod GOAL-HANDLING is
     ceq proceedGoalsWithFacts({lits: ML MLL, facts: emptyTS, path: [MR, ENV] PATH, depth: N', stack: STACK} GL, BK, MRS', N, NEG) = 
         if (N' < N) and (size(getBody(MR)) > 1) then
             if (MLL == nil) and hasSOVarOnly(BL) then
-                --- Optimize
+                --- Optimize: (Put Predicate to be the last element of GoalList)
                 proceedGoals(
                     {
                         goal: toTerm(BL << (getSOVar(BL) |-> getPredInvName(N'))), 
