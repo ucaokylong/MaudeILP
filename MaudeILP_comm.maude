@@ -731,14 +731,14 @@ fmod GOAL-HANDLING is
             else
                 if (N' < N) and isRecursiveCall(MR, ENV, BL) then
                     if (MLL == nil) then
-                        --- [Optimize]: (Put Recursive Call to be the last element of GoalList)
+                        --- 
                         proceedGoals(
-                            GL {goal: toTerm(BL), rules: MRS', path: [MR, ENV] PATH, depth: (N' + 1), stack: STACK}, 
+                            {goal: toTerm(BL), rules: MRS', path: [MR, ENV] PATH, depth: (N' + 1), stack: STACK} GL, 
                             BK, MRS', N, NEG
                         )
                     else
                         proceedGoals(
-                            GL {goal: toTerm(BL), rules: MRS', path: PATH, depth: (N' + 1), stack: mctx(BL, MLL, MR, ENV, N') | STACK}, 
+                            {goal: toTerm(BL), rules: MRS', path: PATH, depth: (N' + 1), stack: mctx(BL, MLL, MR, ENV, N') | STACK} GL,
                             BK, MRS', N, NEG
                         )
                     fi
