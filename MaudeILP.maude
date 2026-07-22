@@ -519,10 +519,26 @@ fmod ENV-APPLYING is
     eq BV **<< ENV = BV [owise] .
 endfm
 
+--- ====================================================================
+--- NEW MODULE: TRANSFORMATION FROM SUBSTITUTION TO ENV
+--- ====================================================================
+fmod SUBST-TO-ENV is
+    pr META-LEVEL .
+    pr ENV .
+    
+    op toEnv : Substitution -> Env .
+    eq toEnv(none) = empty .
+    eq toEnv(V:Variable <- T:Term ; S:Substitution) = (V:Variable |-> T:Term), toEnv(S:Substitution) .
+endfm
+
+--- ====================================================================
+--- UPDATED MODULE: LITERAL-MATCHING WITH AC-MATCHING & MEMOIZATION
+--- ====================================================================
 fmod LITERAL-MATCHING is
     pr META-LITERAL .
     pr PARSING .
     pr ENV .
+    pr SUBST-TO-ENV . --- add transformation from substitution to env
 
     vars BL : BoundLiteral .
     vars TL TL' : TermList .
@@ -531,28 +547,71 @@ fmod LITERAL-MATCHING is
     vars S : Sort .
     vars BV? : [BindVal] .
     vars ENV : Env .
+    vars S? : [Substitution] .
+    vars T_pat : Term .
+    vars ENV_SO ExtractedEnv : Env&Err .
+    vars Q : Qid .
 
-    op matchLiteral : Term BoundLiteral -> Env&Err .
-    ceq matchLiteral(G, BL) = 
+    --- declare Reflection for Maude
+    vars TyL : TypeList .
+    vars Ty : Type .
+    vars AtS : AttrSet .
+    vars ODS : OpDeclSet .
+
+    --- 1. (META-REFLECTION WITH CACHING)
+    --- BƯỚC ĐỘT PHÁ: Thêm [memo] vào đây!
+    op isCommOp : Qid -> Bool [memo] .
+    eq isCommOp(Q) = hasCommAttr(Q, getOps(upModule('ILP-PROBLEM, false))) .
+
+    op hasCommAttr : Qid OpDeclSet -> Bool .
+    eq hasCommAttr(Q, (op Q : TyL -> Ty [comm AtS] .) ODS) = true .
+    eq hasCommAttr(Q, ODS) = false [owise] .
+
+    --- 2. (SECOND-ORDER VARIABLE)
+    op bindSOVar : Term BoundLiteral -> Env&Err .
+    ceq bindSOVar(G, BL) = 
         if getSOVar(BL) :: Variable then 
             getSOVar(BL) |-> getPred(G) 
         else 
-            if getSOVar(BL) == getPred(G) then
-                empty
-            else
-               errEnv
-            fi 
-        fi,
-        matchArgs(getArgs(G), getFOVars(BL))
+            if getSOVar(BL) == getPred(G) then empty else errEnv fi
+        fi 
     if getNumOfArgs(G) == getNumOfAriry(BL) .
+    eq bindSOVar(G, BL) = errEnv [owise] .
+
+    op matchLiteral : Term BoundLiteral -> Env&Err .
+
+    --- 3. PIPELINE 1: (SYNTACTIC MATCHING - FAST PATH)
+    --- For normal predicates (parent) and Predicate Invention (inv1)
+    ceq matchLiteral(G, BL) = 
+        if (ENV_SO == errEnv) or (ExtractedEnv == errEnv) then 
+            errEnv 
+        else 
+            (ENV_SO , ExtractedEnv)
+        fi
+    if not isCommOp(getPred(G))
+    /\ ENV_SO := bindSOVar(G, BL)
+    /\ ExtractedEnv := matchArgs(getArgs(G), getFOVars(BL)) .
+
+    --- 4. PIPELINE 2: (AC-MATCHING - SLOW PATH)
+    --- For predicates WITH [comm] declaration in ILP-PROBLEM
+    ceq matchLiteral(G, BL) = 
+        if ENV_SO == errEnv then 
+            errEnv 
+        else 
+            if S? :: Substitution then 
+                ENV_SO , toEnv(S?)
+            else 
+                errEnv 
+            fi
+        fi
+    if isCommOp(getPred(G))
+    /\ ENV_SO := bindSOVar(G, BL)
+    /\ T_pat := getPred(G)[getFOVars(BL)]
+    /\ S? := metaMatch(upModule('ILP-PROBLEM, false), T_pat, G, nil, 0) .
     
     eq matchLiteral(G, BL) = errEnv [owise] .
 
-    --- op isFreeVar : Term -> Bool .
-    --- ceq isFreeVar(V:Variable) = sortLeq(upModule('ILP-PROBLEM, false), S, 'FreeVariable) 
-    ---     if S := getType(V:Variable) .
-    --- eq isFreeVar(T:Term) = false [owise] .
-
+    --- 5. PIPELINE 3: (CORE SYNTAX MATCHING)
     op matchArgs : TermList TermList -> Env&Err .
     op matchArgs* : TermList TermList Env -> Env&Err .
     
@@ -673,14 +732,14 @@ fmod GOAL-HANDLING is
             else
                 if (N' < N) and isRecursiveCall(MR, ENV, BL) then
                     if (MLL == nil) then
-                        --- [Optimize]
+                        --- 
                         proceedGoals(
                             {goal: toTerm(BL), rules: MRS', path: [MR, ENV] PATH, depth: (N' + 1), stack: STACK} GL, 
                             BK, MRS', N, NEG
                         )
                     else
                         proceedGoals(
-                            {goal: toTerm(BL), rules: MRS', path: PATH, depth: (N' + 1), stack: mctx(BL, MLL, MR, ENV, N') | STACK} GL, 
+                            {goal: toTerm(BL), rules: MRS', path: PATH, depth: (N' + 1), stack: mctx(BL, MLL, MR, ENV, N') | STACK} GL,
                             BK, MRS', N, NEG
                         )
                     fi
@@ -717,14 +776,14 @@ fmod GOAL-HANDLING is
                 )
             else
                 proceedGoals(
-                    GL
                     {
                         goal: toTerm(BL << (getSOVar(BL) |-> getPredInvName(N'))), 
                         rules: MRS', 
                         path: PATH, 
                         depth: (N' + 1),
                         stack: mctx(BL, MLL, MR, (ENV, getSOVar(BL) |-> getPredInvName(N')), N') | STACK
-                    }, 
+                    }
+                    GL, 
                     BK, MRS', N, NEG
                 )
             fi
@@ -792,12 +851,12 @@ fmod GOAL-HANDLING is
                 if (N' < N) and hasRuleByQid(getSOVar(BL'), BRS') then
                     if (BLL == nil) then
                         checkGoals(
-                            GL {goal: toTerm(BL'), rules: BRS', path: [BR, ENV] PATH, depth: (N' + 1), stack: STACK}, 
+                            {goal: toTerm(BL'), rules: BRS', path: [BR, ENV] PATH, depth: (N' + 1), stack: STACK} GL, 
                             BK, BRS', N
                         )
                     else
                         checkGoals(
-                            GL {goal: toTerm(BL'), rules: BRS', path: PATH, depth: (N' + 1), stack: bctx(BL', BLL, BR, ENV, N') | STACK}, 
+                            {goal: toTerm(BL'), rules: BRS', path: PATH, depth: (N' + 1), stack: bctx(BL', BLL, BR, ENV, N') | STACK} GL, 
                             BK, BRS', N
                         )
                     fi
@@ -816,18 +875,18 @@ fmod GOAL-HANDLING is
         if (N' < N) and hasRuleByQid(getSOVar(BL'), BRS') then
             if (BLL == nil) then
                 checkGoals(
-                    GL {goal: toTerm(BL'), rules: BRS', path: [BR, ENV] PATH, depth: (N' + 1), stack: STACK}, 
+                    {goal: toTerm(BL'), rules: BRS', path: [BR, ENV] PATH, depth: (N' + 1), stack: STACK} GL, 
                     BK, BRS', N
                 )
             else
-                checkGoals(
-                    GL {
+                checkGoals( 
+                    {
                         goal: toTerm(BL'), 
                         rules: BRS', 
                         path: PATH, 
                         depth: (N' + 1), 
                         stack: bctx(BL', BLL, BR, ENV, N') | STACK
-                    }, 
+                    } GL, 
                     BK, BRS', N
                 )
             fi

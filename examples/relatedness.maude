@@ -51,6 +51,7 @@ fmod ILP-PROBLEM is
 endfm
 
 select MAUDE-ILP .
---- red learn(1) .
+red learn() .
+red learn(1) .
 red learn(2) .
 --- red learn(3) .

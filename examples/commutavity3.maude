@@ -1,0 +1,31 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Person .
+    subsort Person < Param .
+
+    ops ann bob ana : -> Person [ctor] .
+
+    op mother : Person Person -> Pred [ctor] .
+    op sibling : Person Person -> Pred [ctor comm] .
+    op aunt : Person Person -> Pred [ctor] .
+
+    eq BK =
+        sibling(ana, ann)   --- Chiều duy nhất trong BK (ngược với ann)
+        mother(ana, bob) .
+
+    eq POS =
+        aunt(ann, bob) .
+
+    vars P Q R : Pred .
+    vars A B C : Person .
+
+    eq METARULES =
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        [nonexec] .
+endfm
+
+select MAUDE-ILP .
+red learn() .

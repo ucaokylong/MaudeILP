@@ -1,3 +1,5 @@
+load ../MaudeILP.maude .
+
 fmod ILP-PROBLEM is 
     pr ILP-DEFINITION-INPUT .
     
@@ -9,7 +11,7 @@ fmod ILP-PROBLEM is
 
     op parent : Person Person -> Pred [ctor] .
     op sibling : Person Person -> Pred [ctor comm] .
-    op testPred : Person Person -> Pred [ctor] .
+    op aunt : Person Person -> Pred [ctor] .
 
     eq BK =
         parent(ann, bob)
@@ -17,7 +19,7 @@ fmod ILP-PROBLEM is
         --- Maude tự lưu sibling(bob, cal) vì 'bob' đứng trước 'cal'
 
     eq POS =
-        testPred(ann, cal) .
+        aunt(ann, cal) .
 
 
     vars P Q R : Pred .

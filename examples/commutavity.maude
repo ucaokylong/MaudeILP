@@ -1,3 +1,5 @@
+load ../MaudeILP.maude .
+
 fmod ILP-PROBLEM is 
     pr ILP-DEFINITION-INPUT .
     
