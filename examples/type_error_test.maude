@@ -1,0 +1,28 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Person .
+    subsort Person < Param .
+
+    ops ann amy amelia : -> Person [ctor] .
+    op grandparent : Person Person -> Pred [ctor] .
+    op parent : Person Person -> Pred [ctor] .
+
+    eq BK = 
+        parent(ann, amy)
+        parent(amy, amelia) .
+
+    eq POS = 
+        grandparent(ann, amelia)
+        grandparent(ann, 25) .  --- ERROR: 25 is Nat, not Person
+
+
+    vars P Q R : Pred .
+    vars A B C : Person .
+
+    eq METARULES = 
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        [nonexec] .
+endfm

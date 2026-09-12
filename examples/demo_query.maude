@@ -1,0 +1,26 @@
+load ../MaudeILP.maude .
+
+fmod ILP-PROBLEM is
+    pr ILP-DEFINITION-INPUT .
+
+    sort Person .
+    subsort Person < Param .
+
+    ops ann amy amelia : -> Person [ctor] .
+    ops parent grandparent : Person Person -> Pred [ctor] .
+
+    eq BK = 
+        parent(ann, amy)
+        parent(amy, amelia) .
+
+    eq POS = 
+        grandparent(ann, amelia) .
+
+    vars P Q R : Pred .
+    vars A B C : Person .
+
+    --- ĐỊNH NGHĨA METARULES ĐỂ TRÁNH LỖI UNREDUCED TERM:
+    eq METARULES = 
+        (P(A,B) :- (Q(A,C)) (R(C,B)))
+        [nonexec] .
+endfm
